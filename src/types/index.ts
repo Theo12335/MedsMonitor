@@ -1,5 +1,5 @@
 // User Types
-export type UserRole = "caregiver" | "patient" | "admin";
+export type UserRole = "caregiver" | "admin";
 
 export interface User {
   id: string;
@@ -18,12 +18,17 @@ export interface Caregiver extends User {
   assignedPatients: string[]; // Patient IDs
 }
 
-export interface Patient extends User {
-  role: "patient";
+export interface Patient {
+  id: string;
+  email: string;
+  name: string;
+  role: "patient"; // Note: "patient" is not a valid login role, but kept for data structure
   roomNumber: string;
   admissionDate: Date;
   assignedCaregivers: string[]; // Caregiver IDs
   medications: PatientMedication[];
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // Medication Types
@@ -54,6 +59,17 @@ export interface PatientMedication {
 
 // Medication Log Types
 export type MedicationStatus = "pending" | "taken" | "missed" | "skipped";
+
+// Hardware Fill Status Types (for prototype drawer system)
+export type DrawerFillStatus = "full" | "mid" | "empty";
+
+export interface DrawerFillReading {
+  id: string;
+  drawerId: string;
+  fillStatus: DrawerFillStatus;
+  fillPercentage: number; // 0-100
+  timestamp: Date;
+}
 
 export interface MedicationLog {
   id: string;

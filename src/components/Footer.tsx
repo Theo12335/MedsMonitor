@@ -39,10 +39,10 @@ export default function Footer() {
                   />
                 </svg>
               </div>
-              <span style={{ fontWeight: 700, color: 'white', fontSize: '20px' }}>Smart Care Monitor</span>
+              <span style={{ fontWeight: 700, color: 'white', fontSize: '20px' }}>DoseKoPo</span>
             </Link>
             <p style={{ color: '#94a3b8', fontSize: '15px', lineHeight: 1.6, marginTop: '24px' }}>
-              Advanced Patient & Caregiver Monitoring System for modern healthcare facilities.
+              Smart Medication Dispensing System for modern healthcare facilities.
             </p>
           </div>
 
@@ -105,7 +105,7 @@ export default function Footer() {
                     d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                   />
                 </svg>
-                <span style={{ fontSize: '15px' }}>contact@smartcaremonitor.com</span>
+                <span style={{ fontSize: '15px' }}>contact@dosekopo.com</span>
               </li>
             </ul>
           </div>
@@ -135,10 +135,10 @@ export default function Footer() {
           gap: '16px'
         }}>
           <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>
-            &copy; 2025 Smart Care Monitor. All rights reserved.
+            &copy; 2025 DoseKoPo. All rights reserved.
           </p>
           <p style={{ color: '#475569', fontSize: '14px', margin: 0 }}>
-            Healthcare Data Management System
+            Smart Medication Dispensing System
           </p>
         </div>
       </div>

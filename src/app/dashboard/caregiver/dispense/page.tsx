@@ -1,56 +1,176 @@
 "use client";
 
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useProfile, usePatients, useDrawers } from "@/lib/supabase/hooks";
 
-// Mock data - replace with real API calls
-const patients = [
-  { id: 1, name: "John Doe", room: "101A", medications: [
-    { id: 1, name: "Aspirin", dosage: "100mg", drawer: "A1", time: "8:00 AM", status: "pending" },
-    { id: 2, name: "Metformin", dosage: "500mg", drawer: "B3", time: "12:00 PM", status: "pending" },
-  ]},
-  { id: 2, name: "Jane Smith", room: "102B", medications: [
-    { id: 3, name: "Lisinopril", dosage: "10mg", drawer: "A2", time: "8:00 AM", status: "pending" },
-  ]},
-  { id: 3, name: "Bob Wilson", room: "103C", medications: [
-    { id: 4, name: "Vitamin D", dosage: "1000 IU", drawer: "B1", time: "9:00 AM", status: "pending" },
-  ]},
-];
+interface PatientMedication {
+  id: string;
+  name: string;
+  dosage: string;
+  drawer: string;
+  time: string;
+  status: string;
+  logId?: string;
+}
 
-const drawers = [
-  { id: "A1", medicine: "Aspirin 100mg", stock: 45, status: "ok" },
-  { id: "A2", medicine: "Lisinopril 10mg", stock: 32, status: "ok" },
-  { id: "A3", medicine: "Atorvastatin 20mg", stock: 28, status: "ok" },
-  { id: "B1", medicine: "Vitamin D 1000 IU", stock: 50, status: "ok" },
-  { id: "B2", medicine: "Omeprazole 20mg", stock: 18, status: "low" },
-  { id: "B3", medicine: "Metformin 500mg", stock: 8, status: "low" },
-];
+interface PatientWithMeds {
+  id: string;
+  name: string;
+  room: string;
+  medications: PatientMedication[];
+}
 
 export default function DispensePage() {
-  const [selectedPatient, setSelectedPatient] = useState<number | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
   const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
-  const [dispensingMed, setDispensingMed] = useState<number | null>(null);
+  const [dispensingMed, setDispensingMed] = useState<string | null>(null);
+  const [patientsWithMeds, setPatientsWithMeds] = useState<PatientWithMeds[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleSelectMedication = (medicationId: number, drawer: string) => {
+  const { profile } = useProfile();
+  const { patients } = usePatients();
+  const { drawers } = useDrawers();
+  const supabase = createClient();
+
+  const userName = profile?.name || "Loading...";
+
+  // Fetch patients with their pending medications
+  useEffect(() => {
+    const fetchPatientsWithMedications = async () => {
+      if (patients.length === 0) return;
+
+      const today = new Date();
+      const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+      const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+
+      const patientMedsMap: PatientWithMeds[] = [];
+
+      for (const patient of patients) {
+        // Get medication logs for this patient today
+        const { data: logs } = await supabase
+          .from("medication_logs")
+          .select(`
+            id,
+            scheduled_time,
+            status,
+            patient_medication:patient_medications(
+              id,
+              dosage,
+              medication:medications(name, drawer_location)
+            )
+          `)
+          .eq("patient_id", patient.id)
+          .gte("scheduled_time", startOfDay)
+          .lte("scheduled_time", endOfDay)
+          .order("scheduled_time");
+
+        const medications: PatientMedication[] = (logs || []).map((log: any) => ({
+          id: log.patient_medication?.id || log.id,
+          name: log.patient_medication?.medication?.name || "Unknown",
+          dosage: log.patient_medication?.dosage || "N/A",
+          drawer: log.patient_medication?.medication?.drawer_location || "N/A",
+          time: new Date(log.scheduled_time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+          status: log.status,
+          logId: log.id,
+        }));
+
+        if (medications.length > 0) {
+          patientMedsMap.push({
+            id: patient.id,
+            name: patient.name,
+            room: patient.room_number,
+            medications,
+          });
+        }
+      }
+
+      setPatientsWithMeds(patientMedsMap);
+      setLoading(false);
+    };
+
+    fetchPatientsWithMedications();
+  }, [patients, supabase]);
+
+  const handleSelectMedication = async (medicationId: string, drawer: string) => {
     setActiveDrawer(drawer);
     setDispensingMed(medicationId);
-    // TODO: Send WebSocket message to Arduino to light up the drawer LED
+
+    // Update drawer LED status in database
+    await supabase
+      .from("drawers")
+      .update({ led_active: true, status: "active" })
+      .eq("label", drawer);
+
     console.log(`Lighting up drawer ${drawer} for medication ${medicationId}`);
   };
 
-  const handleDispenseComplete = () => {
-    // TODO: This would be triggered by the Arduino detecting drawer close
-    // For now, we simulate it with a button click
+  const handleDispenseComplete = async () => {
+    if (!dispensingMed || !activeDrawer) return;
+
+    const currentPatient = patientsWithMeds.find((p) => p.id === selectedPatient);
+    const medication = currentPatient?.medications.find((m) => m.id === dispensingMed);
+
+    if (medication?.logId) {
+      // Update medication log to "taken"
+      await supabase
+        .from("medication_logs")
+        .update({
+          status: "taken",
+          actual_time: new Date().toISOString(),
+          caregiver_id: profile?.id,
+          drawer_opened: true,
+        })
+        .eq("id", medication.logId);
+
+      // Update local state
+      setPatientsWithMeds((prev) =>
+        prev.map((p) =>
+          p.id === selectedPatient
+            ? {
+                ...p,
+                medications: p.medications.map((m) =>
+                  m.id === dispensingMed ? { ...m, status: "taken" } : m
+                ),
+              }
+            : p
+        )
+      );
+    }
+
+    // Turn off drawer LED
+    await supabase
+      .from("drawers")
+      .update({ led_active: false, status: "idle" })
+      .eq("label", activeDrawer);
+
     setActiveDrawer(null);
     setDispensingMed(null);
-    // TODO: Update medication status to "taken" via API
-    console.log("Medication dispensed, updating records...");
   };
 
-  const currentPatient = patients.find((p) => p.id === selectedPatient);
+  const currentPatient = patientsWithMeds.find((p) => p.id === selectedPatient);
+
+  // Map drawers for visualization
+  const drawerDisplay = drawers.map((d) => ({
+    id: d.label,
+    medicine: d.medication ? `${d.medication.name} ${d.medication.dosage}` : "Empty",
+    stock: d.estimated_pill_count,
+    status: d.status === "low_stock" || d.status === "empty" ? "low" : "ok",
+  }));
+
+  if (loading) {
+    return (
+      <DashboardLayout userRole="caregiver" userName={userName}>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
-    <DashboardLayout userRole="caregiver" userName="Jane Smith">
+    <DashboardLayout userRole="caregiver" userName={userName}>
       <div className="space-y-6">
         {/* Header */}
         <div>
@@ -65,27 +185,33 @@ export default function DispensePage() {
               <h2 className="text-lg font-semibold text-white">Select Patient</h2>
             </div>
             <div className="p-4 space-y-2 max-h-[400px] overflow-y-auto">
-              {patients.map((patient) => (
-                <button
-                  key={patient.id}
-                  onClick={() => setSelectedPatient(patient.id)}
-                  className={`w-full p-4 rounded-xl border text-left transition-all ${
-                    selectedPatient === patient.id
-                      ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
-                      : "bg-[#1e293b] border-[#334155] text-white hover:border-slate-500"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{patient.name}</p>
-                      <p className="text-sm text-slate-400">Room {patient.room}</p>
+              {patientsWithMeds.length > 0 ? (
+                patientsWithMeds.map((patient) => (
+                  <button
+                    key={patient.id}
+                    onClick={() => setSelectedPatient(patient.id)}
+                    className={`w-full p-4 rounded-xl border text-left transition-all ${
+                      selectedPatient === patient.id
+                        ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
+                        : "bg-[#1e293b] border-[#334155] text-white hover:border-slate-500"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{patient.name}</p>
+                        <p className="text-sm text-slate-400">Room {patient.room}</p>
+                      </div>
+                      <div className="px-2 py-1 bg-amber-500/20 rounded text-xs text-amber-400 flex-shrink-0">
+                        {patient.medications.filter((m) => m.status === "pending").length} pending
+                      </div>
                     </div>
-                    <div className="px-2 py-1 bg-amber-500/20 rounded text-xs text-amber-400">
-                      {patient.medications.filter((m) => m.status === "pending").length} pending
-                    </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                ))
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <p>No patients with pending medications</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -103,31 +229,41 @@ export default function DispensePage() {
                     <div
                       key={med.id}
                       className={`p-4 rounded-xl border transition-all ${
-                        dispensingMed === med.id
+                        med.status === "taken"
+                          ? "bg-emerald-500/10 border-emerald-500/30 opacity-60"
+                          : dispensingMed === med.id
                           ? "bg-emerald-500/20 border-emerald-500"
                           : "bg-[#1e293b] border-[#334155]"
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <p className="text-white font-medium">{med.name}</p>
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-white font-medium truncate">{med.name}</p>
                           <p className="text-sm text-slate-400">{med.dosage}</p>
                         </div>
-                        <span className="text-amber-400 text-sm">{med.time}</span>
+                        <span className={`text-sm flex-shrink-0 ${med.status === "taken" ? "text-emerald-400" : "text-amber-400"}`}>
+                          {med.time}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-slate-500">Drawer {med.drawer}</span>
-                        <button
-                          onClick={() => handleSelectMedication(med.id, med.drawer)}
-                          disabled={dispensingMed !== null && dispensingMed !== med.id}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                            dispensingMed === med.id
-                              ? "bg-emerald-500 text-white"
-                              : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30"
-                          } disabled:opacity-50 disabled:cursor-not-allowed`}
-                        >
-                          {dispensingMed === med.id ? "Active" : "Locate"}
-                        </button>
+                        {med.status === "taken" ? (
+                          <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-lg text-xs font-medium">
+                            Dispensed
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleSelectMedication(med.id, med.drawer)}
+                            disabled={dispensingMed !== null && dispensingMed !== med.id}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                              dispensingMed === med.id
+                                ? "bg-emerald-500 text-white"
+                                : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30"
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          >
+                            {dispensingMed === med.id ? "Active" : "Locate"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -156,7 +292,7 @@ export default function DispensePage() {
               {/* Storage Unit Visualization */}
               <div className="bg-[#1e293b] rounded-xl p-4 mb-4">
                 <div className="grid grid-cols-3 gap-3">
-                  {drawers.map((drawer) => (
+                  {drawerDisplay.map((drawer) => (
                     <div
                       key={drawer.id}
                       className={`aspect-square rounded-lg border-2 flex flex-col items-center justify-center p-2 transition-all ${
@@ -204,7 +340,7 @@ export default function DispensePage() {
                     onClick={handleDispenseComplete}
                     className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium transition-colors"
                   >
-                    Confirm Dispense (Simulate)
+                    Confirm Dispense
                   </button>
                 </div>
               )}
@@ -212,16 +348,16 @@ export default function DispensePage() {
               {/* Drawer Legend */}
               <div className="space-y-2">
                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Drawer Contents</p>
-                {drawers.map((drawer) => (
-                  <div key={drawer.id} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${
+                {drawerDisplay.map((drawer) => (
+                  <div key={drawer.id} className="flex items-center justify-between gap-2 text-sm">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                         drawer.status === "low" ? "bg-amber-500" : "bg-emerald-500"
                       }`}></span>
-                      <span className="text-slate-400">{drawer.id}:</span>
-                      <span className="text-white">{drawer.medicine}</span>
+                      <span className="text-slate-400 flex-shrink-0">{drawer.id}:</span>
+                      <span className="text-white truncate">{drawer.medicine}</span>
                     </div>
-                    <span className={`text-xs ${
+                    <span className={`text-xs flex-shrink-0 ${
                       drawer.status === "low" ? "text-amber-400" : "text-slate-500"
                     }`}>
                       {drawer.stock}

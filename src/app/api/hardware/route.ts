@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ApiResponse, HardwareMessage, DrawerStatus } from "@/types";
+import { ApiResponse, HardwareMessage, DrawerStatus, DrawerFillStatus } from "@/types";
 
 /**
  * Hardware API Endpoints
@@ -28,6 +28,13 @@ import { ApiResponse, HardwareMessage, DrawerStatus } from "@/types";
  *    - Commands are queued and returned on poll
  */
 
+// Helper function to calculate fill status from percentage
+function calculateFillStatus(fillPercentage: number): DrawerFillStatus {
+  if (fillPercentage >= 70) return "full";
+  if (fillPercentage >= 30) return "mid";
+  return "empty";
+}
+
 // In-memory state (replace with database/Redis in production)
 interface HardwareState {
   drawers: Map<string, {
@@ -35,6 +42,8 @@ interface HardwareState {
     ledActive: boolean;
     currentWeight: number;
     pillCount: number;
+    fillPercentage: number;
+    fillStatus: DrawerFillStatus;
     lastUpdated: Date;
   }>;
   isConnected: boolean;
@@ -44,12 +53,12 @@ interface HardwareState {
 
 const hardwareState: HardwareState = {
   drawers: new Map([
-    ["A1", { status: "idle", ledActive: false, currentWeight: 450, pillCount: 45, lastUpdated: new Date() }],
-    ["A2", { status: "idle", ledActive: false, currentWeight: 320, pillCount: 32, lastUpdated: new Date() }],
-    ["A3", { status: "idle", ledActive: false, currentWeight: 280, pillCount: 28, lastUpdated: new Date() }],
-    ["B1", { status: "idle", ledActive: false, currentWeight: 500, pillCount: 50, lastUpdated: new Date() }],
-    ["B2", { status: "low_stock", ledActive: false, currentWeight: 180, pillCount: 18, lastUpdated: new Date() }],
-    ["B3", { status: "low_stock", ledActive: false, currentWeight: 80, pillCount: 8, lastUpdated: new Date() }],
+    ["A1", { status: "idle", ledActive: false, currentWeight: 450, pillCount: 45, fillPercentage: 90, fillStatus: "full", lastUpdated: new Date() }],
+    ["A2", { status: "idle", ledActive: false, currentWeight: 425, pillCount: 43, fillPercentage: 85, fillStatus: "full", lastUpdated: new Date() }],
+    ["A3", { status: "idle", ledActive: false, currentWeight: 275, pillCount: 28, fillPercentage: 55, fillStatus: "mid", lastUpdated: new Date() }],
+    ["B1", { status: "low_stock", ledActive: false, currentWeight: 90, pillCount: 9, fillPercentage: 18, fillStatus: "empty", lastUpdated: new Date() }],
+    ["B2", { status: "idle", ledActive: false, currentWeight: 450, pillCount: 45, fillPercentage: 90, fillStatus: "full", lastUpdated: new Date() }],
+    ["B3", { status: "idle", ledActive: false, currentWeight: 225, pillCount: 23, fillPercentage: 45, fillStatus: "mid", lastUpdated: new Date() }],
   ]),
   isConnected: true, // Simulated connection
   lastHeartbeat: new Date(),

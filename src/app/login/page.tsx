@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
-type UserRole = "caregiver" | "patient";
+type UserRole = "caregiver" | "admin";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const supabase = createClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,15 +22,47 @@ export default function LoginPage() {
     setError("");
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      if (role === "caregiver") {
-        router.push("/dashboard/caregiver");
-      } else {
-        router.push("/dashboard/patient");
+      if (authError) {
+        setError(authError.message);
+        return;
+      }
+
+      if (data.user) {
+        // Fetch user profile to get role
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role, setup_completed")
+          .eq("id", data.user.id)
+          .single();
+
+        if (profileError || !profile) {
+          setError("User profile not found. Please contact administrator.");
+          await supabase.auth.signOut();
+          return;
+        }
+
+        // Validate role matches selection
+        if (profile.role !== role) {
+          setError(`Invalid credentials for ${role} access. Please select the correct role.`);
+          await supabase.auth.signOut();
+          return;
+        }
+
+        // Redirect based on role
+        if (profile.role === "caregiver") {
+          router.push("/dashboard/caregiver");
+        } else if (profile.role === "admin") {
+          router.push("/dashboard/admin");
+        }
+        router.refresh();
       }
     } catch {
-      setError("Login failed. Please try again.");
+      setError("An unexpected error occurred. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -104,7 +138,7 @@ export default function LoginPage() {
               />
             </svg>
           </div>
-          <span style={{ fontWeight: 700, color: 'white', fontSize: '24px' }}>Smart Care Monitor</span>
+          <span style={{ fontWeight: 700, color: 'white', fontSize: '24px' }}>DoseKoPo</span>
         </Link>
 
         {/* Login Card */}
@@ -124,11 +158,11 @@ export default function LoginPage() {
                 SYSTEM ACCESS
               </h1>
               <p style={{ color: '#64748b', fontSize: '14px' }}>
-                Select your role and enter credentials
+                Enter your credentials to continue
               </p>
             </div>
 
-            {/* Role Selection */}
+            {/* Role Selection (visual only - role is determined by profile) */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '32px' }}>
               <button
                 type="button"
@@ -171,12 +205,12 @@ export default function LoginPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setRole("patient")}
+                onClick={() => setRole("admin")}
                 style={{
                   padding: '20px',
                   borderRadius: '16px',
-                  border: role === "patient" ? '2px solid #3b82f6' : '1px solid #1e293b',
-                  backgroundColor: role === "patient" ? 'rgba(59, 130, 246, 0.1)' : '#0f172a',
+                  border: role === "admin" ? '2px solid #a855f7' : '1px solid #1e293b',
+                  backgroundColor: role === "admin" ? 'rgba(168, 85, 247, 0.1)' : '#0f172a',
                   cursor: 'pointer',
                   transition: 'all 0.3s'
                 }}
@@ -187,7 +221,7 @@ export default function LoginPage() {
                     height: '32px',
                     margin: '0 auto 12px',
                     display: 'block',
-                    color: role === "patient" ? '#60a5fa' : '#64748b'
+                    color: role === "admin" ? '#c084fc' : '#64748b'
                   }}
                   fill="none"
                   stroke="currentColor"
@@ -197,15 +231,21 @@ export default function LoginPage() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={1.5}
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
                 <span style={{
                   fontWeight: 600,
                   fontSize: '15px',
-                  color: role === "patient" ? '#60a5fa' : '#94a3b8'
+                  color: role === "admin" ? '#c084fc' : '#94a3b8'
                 }}>
-                  Patient
+                  Admin
                 </span>
               </button>
             </div>
@@ -214,10 +254,10 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '13px', color: '#64748b', marginBottom: '8px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Email / ID
+                  Email
                 </label>
                 <input
-                  type="text"
+                  type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   style={{
@@ -232,7 +272,7 @@ export default function LoginPage() {
                     transition: 'border-color 0.3s',
                     boxSizing: 'border-box'
                   }}
-                  placeholder="Enter your email or ID"
+                  placeholder="Enter your email"
                   required
                   onFocus={(e) => e.target.style.borderColor = '#10b981'}
                   onBlur={(e) => e.target.style.borderColor = '#1e293b'}

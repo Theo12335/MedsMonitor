@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Smart Care Monitor | Advanced Healthcare Dashboard",
-  description: "Real-time healthcare data management system for tracking caregiver attendance and patient medication schedules with absolute precision.",
+  title: "DoseKoPo | Smart Medication Dispensing System",
+  description: "Real-time medication dispensing and management system for tracking caregiver attendance and patient medication schedules with absolute precision.",
 };
 
 export default function RootLayout({
@@ -23,9 +23,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#030712] text-white`}
+        suppressHydrationWarning
       >
         {children}
       </body>

@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const mockUser: User = {
       id: `user_${Date.now()}`,
       email: email,
-      name: role === "caregiver" ? "Jane Smith" : "John Doe",
+      name: role === "caregiver" ? "Jane Smith" : "Admin User",
       role: role,
       createdAt: new Date(),
       updatedAt: new Date(),
