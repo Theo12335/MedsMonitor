@@ -209,3 +209,37 @@ export interface RestockLog {
   restockedBy: string; // Caregiver ID
   createdAt: Date;
 }
+
+// =============================================================================
+// ESP32 Dispenser Types
+// =============================================================================
+
+export type DispenseQueueStatus = "pending" | "in_progress" | "completed" | "failed";
+
+export interface DispenseQueueEntry {
+  id: string;
+  patientMedicationId: string;
+  drawerId: string;  // "D0" to "D13" for 14 drawers
+  scheduledTime: Date;
+  status: DispenseQueueStatus;
+  attemptCount: number;
+  maxAttempts: number;
+  irConfirmed: boolean;
+  errorMessage?: string;
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+// ESP32 API types - re-exported from dispenser module
+export type {
+  PendingTasksResponse,
+  PendingTask,
+  DispenseResultRequest,
+  DispenseResultResponse,
+  HeartbeatRequest,
+  HeartbeatResponse,
+  SensorStatus,
+  DeviceConfig,
+  DeviceStatus,
+  DispenseErrorCode,
+} from "@/lib/dispenser/types";
