@@ -219,6 +219,39 @@ export default function PatientsPage() {
     setMedFormData({ ...medFormData, scheduled_times: newTimes });
   };
 
+  // Convert 24h to 12h format for display
+  const to12Hour = (time24: string) => {
+    const [hourStr, minStr] = time24.split(':');
+    let hour = parseInt(hourStr, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12 || 12;
+    return { hour: hour.toString(), minute: minStr || '00', ampm };
+  };
+
+  // Format time for display (e.g., "8:00 AM")
+  const formatTimeDisplay = (time24: string) => {
+    const { hour, minute, ampm } = to12Hour(time24);
+    return `${hour}:${minute} ${ampm}`;
+  };
+
+  // Convert 12h to 24h format for storage
+  const to24Hour = (hour: string, minute: string, ampm: string) => {
+    let h = parseInt(hour, 10);
+    if (ampm === 'PM' && h !== 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return `${h.toString().padStart(2, '0')}:${minute}`;
+  };
+
+  // Update time with 12h components
+  const updateTimeComponent = (index: number, component: 'hour' | 'minute' | 'ampm', value: string) => {
+    const current = to12Hour(medFormData.scheduled_times[index]);
+    if (component === 'hour') current.hour = value;
+    if (component === 'minute') current.minute = value;
+    if (component === 'ampm') current.ampm = value;
+    const new24h = to24Hour(current.hour, current.minute, current.ampm);
+    updateScheduledTime(index, new24h);
+  };
+
   const filteredPatients = patientsWithMeds.filter(
     (p) =>
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -440,7 +473,7 @@ export default function PatientsPage() {
                               <div className="flex flex-wrap gap-2 mt-2">
                                 {pm.scheduled_times.map((time, i) => (
                                   <span key={i} className="px-2 py-1 bg-[#0f172a] rounded text-xs text-slate-300">
-                                    {time}
+                                    {formatTimeDisplay(time)}
                                   </span>
                                 ))}
                               </div>
@@ -517,28 +550,55 @@ export default function PatientsPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-slate-400 mb-2">Scheduled Times</label>
-                      <div className="space-y-2">
-                        {medFormData.scheduled_times.map((time, index) => (
-                          <div key={index} className="flex items-center gap-2">
-                            <input
-                              type="time"
-                              value={time}
-                              onChange={(e) => updateScheduledTime(index, e.target.value)}
-                              className="flex-1 px-4 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
-                            />
-                            {medFormData.scheduled_times.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => removeScheduledTime(index)}
-                                className="p-3 text-red-400 hover:text-red-300"
+                      <div className="space-y-3">
+                        {medFormData.scheduled_times.map((time, index) => {
+                          const { hour, minute, ampm } = to12Hour(time);
+                          return (
+                            <div key={index} className="flex items-center gap-2">
+                              {/* Hour */}
+                              <select
+                                value={hour}
+                                onChange={(e) => updateTimeComponent(index, 'hour', e.target.value)}
+                                className="px-3 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
                               >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                        ))}
+                                {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(h => (
+                                  <option key={h} value={h}>{h}</option>
+                                ))}
+                              </select>
+                              <span className="text-slate-400">:</span>
+                              {/* Minute */}
+                              <select
+                                value={minute}
+                                onChange={(e) => updateTimeComponent(index, 'minute', e.target.value)}
+                                className="px-3 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                              >
+                                {['00', '15', '30', '45'].map(m => (
+                                  <option key={m} value={m}>{m}</option>
+                                ))}
+                              </select>
+                              {/* AM/PM */}
+                              <select
+                                value={ampm}
+                                onChange={(e) => updateTimeComponent(index, 'ampm', e.target.value)}
+                                className="px-3 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                              >
+                                <option value="AM">AM</option>
+                                <option value="PM">PM</option>
+                              </select>
+                              {medFormData.scheduled_times.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeScheduledTime(index)}
+                                  className="p-2 text-red-400 hover:text-red-300"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
                         <button
                           type="button"
                           onClick={addScheduledTime}
