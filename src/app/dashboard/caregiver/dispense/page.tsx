@@ -2,6 +2,7 @@
 
 import DashboardLayout from "@/components/DashboardLayout";
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useProfile, usePatients, useDrawers } from "@/lib/supabase/hooks";
 
@@ -23,7 +24,10 @@ interface PatientWithMeds {
 }
 
 export default function DispensePage() {
-  const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const initialPatientId = searchParams.get("patient");
+
+  const [selectedPatient, setSelectedPatient] = useState<string | null>(initialPatientId);
   const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
   const [dispensingMed, setDispensingMed] = useState<string | null>(null);
   const [patientsWithMeds, setPatientsWithMeds] = useState<PatientWithMeds[]>([]);
@@ -42,39 +46,105 @@ export default function DispensePage() {
       if (patients.length === 0) return;
 
       const today = new Date();
+      const todayDate = today.toISOString().split('T')[0];
       const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
       const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
 
       const patientMedsMap: PatientWithMeds[] = [];
 
       for (const patient of patients) {
-        // Get medication logs for this patient today
-        const { data: logs } = await supabase
-          .from("medication_logs")
+        // First, get patient_medications with their scheduled times
+        const { data: patientMeds } = await supabase
+          .from("patient_medications")
           .select(`
             id,
-            scheduled_time,
-            status,
-            patient_medication:patient_medications(
-              id,
-              dosage,
-              medication:medications(name, drawer_location)
-            )
+            dosage,
+            scheduled_times,
+            start_date,
+            end_date,
+            medication:medications(id, name, drawer_location)
           `)
           .eq("patient_id", patient.id)
-          .gte("scheduled_time", startOfDay)
-          .lte("scheduled_time", endOfDay)
-          .order("scheduled_time");
+          .lte("start_date", todayDate)
+          .or(`end_date.is.null,end_date.gte.${todayDate}`);
 
-        const medications: PatientMedication[] = (logs || []).map((log: any) => ({
-          id: log.patient_medication?.id || log.id,
-          name: log.patient_medication?.medication?.name || "Unknown",
-          dosage: log.patient_medication?.dosage || "N/A",
-          drawer: log.patient_medication?.medication?.drawer_location || "N/A",
-          time: new Date(log.scheduled_time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
-          status: log.status,
-          logId: log.id,
-        }));
+        // Get existing logs for today
+        const { data: existingLogs } = await supabase
+          .from("medication_logs")
+          .select("id, scheduled_time, status, patient_medication_id")
+          .eq("patient_id", patient.id)
+          .gte("scheduled_time", startOfDay)
+          .lte("scheduled_time", endOfDay);
+
+        const medications: PatientMedication[] = [];
+
+        for (const pm of patientMeds || []) {
+          const scheduledTimes = pm.scheduled_times || [];
+
+          for (const timeStr of scheduledTimes) {
+            // Create full datetime for this scheduled time today
+            const scheduledDateTime = new Date(`${todayDate}T${timeStr}`);
+
+            // Check if log already exists for this time
+            const existingLog = (existingLogs || []).find((log: any) => {
+              const logTime = new Date(log.scheduled_time);
+              return log.patient_medication_id === pm.id &&
+                     logTime.getHours() === scheduledDateTime.getHours() &&
+                     logTime.getMinutes() === scheduledDateTime.getMinutes();
+            });
+
+            if (existingLog) {
+              // Use existing log
+              medications.push({
+                id: pm.id,
+                name: pm.medication?.name || "Unknown",
+                dosage: pm.dosage || "N/A",
+                drawer: pm.medication?.drawer_location || "N/A",
+                time: scheduledDateTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+                status: existingLog.status,
+                logId: existingLog.id,
+              });
+            } else {
+              // Create a new log entry for this scheduled time
+              const { data: newLog } = await supabase
+                .from("medication_logs")
+                .insert({
+                  patient_id: patient.id,
+                  patient_medication_id: pm.id,
+                  scheduled_time: scheduledDateTime.toISOString(),
+                  status: "pending",
+                })
+                .select("id")
+                .single();
+
+              medications.push({
+                id: pm.id,
+                name: pm.medication?.name || "Unknown",
+                dosage: pm.dosage || "N/A",
+                drawer: pm.medication?.drawer_location || "N/A",
+                time: scheduledDateTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+                status: "pending",
+                logId: newLog?.id,
+              });
+            }
+          }
+        }
+
+        // Sort by scheduled time
+        medications.sort((a, b) => {
+          // Parse "9:00 AM" format to comparable values
+          const parseTime = (timeStr: string) => {
+            const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+            if (!match) return 0;
+            let hours = parseInt(match[1]);
+            const minutes = parseInt(match[2]);
+            const isPM = match[3].toUpperCase() === 'PM';
+            if (isPM && hours !== 12) hours += 12;
+            if (!isPM && hours === 12) hours = 0;
+            return hours * 60 + minutes;
+          };
+          return parseTime(a.time) - parseTime(b.time);
+        });
 
         if (medications.length > 0) {
           patientMedsMap.push({
