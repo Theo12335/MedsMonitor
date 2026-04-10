@@ -1,7 +1,7 @@
 "use client";
 
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useProfile, usePatients, useDrawers } from "@/lib/supabase/hooks";
@@ -23,7 +23,22 @@ interface PatientWithMeds {
   medications: PatientMedication[];
 }
 
+// Wrapper component to handle Suspense for useSearchParams
 export default function DispensePage() {
+  return (
+    <Suspense fallback={
+      <DashboardLayout userRole="caregiver" userName="Loading...">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full"></div>
+        </div>
+      </DashboardLayout>
+    }>
+      <DispensePageContent />
+    </Suspense>
+  );
+}
+
+function DispensePageContent() {
   const searchParams = useSearchParams();
   const initialPatientId = searchParams.get("patient");
 
@@ -80,6 +95,8 @@ export default function DispensePage() {
 
         for (const pm of patientMeds || []) {
           const scheduledTimes = pm.scheduled_times || [];
+          // Handle medication being returned as array or object
+          const med = Array.isArray(pm.medication) ? pm.medication[0] : pm.medication;
 
           for (const timeStr of scheduledTimes) {
             // Create full datetime for this scheduled time today
@@ -97,9 +114,9 @@ export default function DispensePage() {
               // Use existing log
               medications.push({
                 id: pm.id,
-                name: pm.medication?.name || "Unknown",
+                name: med?.name || "Unknown",
                 dosage: pm.dosage || "N/A",
-                drawer: pm.medication?.drawer_location || "N/A",
+                drawer: med?.drawer_location || "N/A",
                 time: scheduledDateTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
                 status: existingLog.status,
                 logId: existingLog.id,
@@ -119,9 +136,9 @@ export default function DispensePage() {
 
               medications.push({
                 id: pm.id,
-                name: pm.medication?.name || "Unknown",
+                name: med?.name || "Unknown",
                 dosage: pm.dosage || "N/A",
-                drawer: pm.medication?.drawer_location || "N/A",
+                drawer: med?.drawer_location || "N/A",
                 time: scheduledDateTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
                 status: "pending",
                 logId: newLog?.id,
