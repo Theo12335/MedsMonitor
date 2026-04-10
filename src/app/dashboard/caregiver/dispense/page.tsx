@@ -93,7 +93,7 @@ export default function DispensePage() {
     fetchPatientsWithMedications();
   }, [patients, supabase]);
 
-  const handleSelectMedication = async (medicationId: string, drawer: string) => {
+  const handleSelectMedication = async (medicationId: string, drawer: string, patientMedicationId: string) => {
     setActiveDrawer(drawer);
     setDispensingMed(medicationId);
 
@@ -103,7 +103,22 @@ export default function DispensePage() {
       .update({ led_active: true, status: "active" })
       .eq("label", drawer);
 
-    console.log(`Lighting up drawer ${drawer} for medication ${medicationId}`);
+    // Add task to dispense_queue for ESP32 to pick up
+    const { error } = await supabase
+      .from("dispense_queue")
+      .insert({
+        patient_medication_id: patientMedicationId,
+        drawer_id: drawer,
+        scheduled_time: new Date().toISOString(),
+        status: "pending",
+        max_attempts: 3,
+      });
+
+    if (error) {
+      console.error("Failed to queue dispense task:", error);
+    } else {
+      console.log(`Dispense task queued for drawer ${drawer}`);
+    }
   };
 
   const handleDispenseComplete = async () => {
@@ -253,7 +268,7 @@ export default function DispensePage() {
                           </span>
                         ) : (
                           <button
-                            onClick={() => handleSelectMedication(med.id, med.drawer)}
+                            onClick={() => handleSelectMedication(med.id, med.drawer, med.id)}
                             disabled={dispensingMed !== null && dispensingMed !== med.id}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                               dispensingMed === med.id
@@ -261,7 +276,7 @@ export default function DispensePage() {
                                 : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30"
                             } disabled:opacity-50 disabled:cursor-not-allowed`}
                           >
-                            {dispensingMed === med.id ? "Active" : "Locate"}
+                            {dispensingMed === med.id ? "Dispensing..." : "Dispense"}
                           </button>
                         )}
                       </div>
@@ -295,7 +310,7 @@ export default function DispensePage() {
                   {drawerDisplay.map((drawer) => (
                     <div
                       key={drawer.id}
-                      className={`aspect-square rounded-lg border-2 flex flex-col items-center justify-center p-2 transition-all ${
+                      className={`relative aspect-square rounded-lg border-2 flex flex-col items-center justify-center p-2 transition-all ${
                         activeDrawer === drawer.id
                           ? "bg-emerald-500/30 border-emerald-500 animate-pulse"
                           : drawer.status === "low"
@@ -305,7 +320,7 @@ export default function DispensePage() {
                     >
                       <span className="text-lg font-bold text-white">{drawer.id}</span>
                       {activeDrawer === drawer.id && (
-                        <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center">
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <div className="w-4 h-4 bg-emerald-500 rounded-full animate-ping"></div>
                         </div>
                       )}
