@@ -572,7 +572,7 @@ export default function PatientsPage() {
                                 onChange={(e) => updateTimeComponent(index, 'minute', e.target.value)}
                                 className="px-3 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
                               >
-                                {['00', '15', '30', '45'].map(m => (
+                                {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0')).map(m => (
                                   <option key={m} value={m}>{m}</option>
                                 ))}
                               </select>
