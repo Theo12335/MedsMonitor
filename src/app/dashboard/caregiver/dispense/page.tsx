@@ -65,11 +65,13 @@ function DispensePageContent() {
       const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
       const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
 
+      console.log("[DISPENSE] Fetching for date:", todayDate);
+
       const patientMedsMap: PatientWithMeds[] = [];
 
       for (const patient of patients) {
-        // First, get patient_medications with their scheduled times
-        const { data: patientMeds } = await supabase
+        // Get ALL patient_medications (no date filter for debugging)
+        const { data: patientMeds, error: pmError } = await supabase
           .from("patient_medications")
           .select(`
             id,
@@ -79,9 +81,13 @@ function DispensePageContent() {
             end_date,
             medication:medications(id, name, drawer_location)
           `)
-          .eq("patient_id", patient.id)
-          .lte("start_date", todayDate)
-          .or(`end_date.is.null,end_date.gte.${todayDate}`);
+          .eq("patient_id", patient.id);
+
+        if (pmError) {
+          console.error("[DISPENSE] Error fetching meds for", patient.name, pmError);
+        }
+
+        console.log("[DISPENSE]", patient.name, "has", patientMeds?.length || 0, "medications:", patientMeds);
 
         // Get existing logs for today
         const { data: existingLogs } = await supabase
@@ -98,9 +104,26 @@ function DispensePageContent() {
           // Handle medication being returned as array or object
           const med = Array.isArray(pm.medication) ? pm.medication[0] : pm.medication;
 
+          console.log("[DISPENSE] Processing med:", pm.id, "times:", scheduledTimes, "med:", med);
+
+          // Skip if medication dates don't cover today
+          const startDate = pm.start_date ? new Date(pm.start_date) : null;
+          const endDate = pm.end_date ? new Date(pm.end_date) : null;
+          const todayObj = new Date(todayDate);
+
+          if (startDate && startDate > todayObj) {
+            console.log("[DISPENSE] Skipping - starts in future:", pm.start_date);
+            continue;
+          }
+          if (endDate && endDate < todayObj) {
+            console.log("[DISPENSE] Skipping - already ended:", pm.end_date);
+            continue;
+          }
+
           for (const timeStr of scheduledTimes) {
             // Create full datetime for this scheduled time today
             const scheduledDateTime = new Date(`${todayDate}T${timeStr}`);
+            console.log("[DISPENSE] Time entry:", timeStr, "->", scheduledDateTime);
 
             // Check if log already exists for this time
             const existingLog = (existingLogs || []).find((log: any) => {
@@ -163,16 +186,16 @@ function DispensePageContent() {
           return parseTime(a.time) - parseTime(b.time);
         });
 
-        if (medications.length > 0) {
-          patientMedsMap.push({
-            id: patient.id,
-            name: patient.name,
-            room: patient.room_number,
-            medications,
-          });
-        }
+        // Always add patient, even with 0 medications
+        patientMedsMap.push({
+          id: patient.id,
+          name: patient.name,
+          room: patient.room_number,
+          medications,
+        });
       }
 
+      console.log("[DISPENSE] Final patient list:", patientMedsMap);
       setPatientsWithMeds(patientMedsMap);
       setLoading(false);
     };
