@@ -1,7 +1,12 @@
 "use client";
 
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState, useEffect } from "react";
+import Panel from "@/components/dashboard/Panel";
+import StatTile from "@/components/dashboard/StatTile";
+import HeroCard from "@/components/dashboard/HeroCard";
+import BarChart from "@/components/dashboard/charts/BarChart";
+import DonutChart from "@/components/dashboard/charts/DonutChart";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/supabase/hooks";
 
@@ -26,10 +31,12 @@ interface MedicationStats {
   missed: number;
 }
 
+type Range = "week" | "month" | "all";
+
 export default function ReportsPage() {
   const { profile } = useProfile();
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState<"week" | "month" | "all">("week");
+  const [dateRange, setDateRange] = useState<Range>("week");
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
   const [caregiverStats, setCaregiverStats] = useState<CaregiverStats[]>([]);
   const [medicationStats, setMedicationStats] = useState<MedicationStats[]>([]);
@@ -45,56 +52,33 @@ export default function ReportsPage() {
 
   const userName = profile?.name || "Loading...";
 
-  // Calculate date range
-  const getDateRange = () => {
-    const now = new Date();
-    let startDate: Date;
-
-    switch (dateRange) {
-      case "week":
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case "month":
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        break;
-      default:
-        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-    }
-
-    return { startDate: startDate.toISOString(), endDate: now.toISOString() };
-  };
-
-  // Fetch all stats
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     setLoading(true);
-    const { startDate, endDate } = getDateRange();
+    const now = new Date();
+    const startDate =
+      dateRange === "week"
+        ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        : dateRange === "month"
+        ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        : new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
-    // Fetch medication logs
     const { data: logs } = await supabase
       .from("medication_logs")
-      .select(`
-        id,
-        status,
-        scheduled_time,
-        actual_time,
-        caregiver_id,
-        patient_medication:patient_medications(
-          medication:medications(name, dosage)
-        ),
-        caregiver:profiles(name)
-      `)
-      .gte("scheduled_time", startDate)
-      .lte("scheduled_time", endDate);
+      .select(
+        `id, status, scheduled_time, actual_time, caregiver_id,
+         patient_medication:patient_medications(medication:medications(name, dosage)),
+         caregiver:profiles(name)`
+      )
+      .gte("scheduled_time", startDate.toISOString())
+      .lte("scheduled_time", now.toISOString());
 
     if (logs) {
-      // Calculate totals
       const dispensed = logs.filter((l) => l.status === "taken").length;
       const missed = logs.filter((l) => l.status === "missed").length;
       const pending = logs.filter((l) => l.status === "pending").length;
       const total = dispensed + missed;
       const complianceRate = total > 0 ? Math.round((dispensed / total) * 100) : 100;
 
-      // Group by date for daily stats
       const dailyMap = new Map<string, DailyStats>();
       logs.forEach((log) => {
         const date = new Date(log.scheduled_time).toISOString().split("T")[0];
@@ -106,8 +90,8 @@ export default function ReportsPage() {
       });
       setDailyStats(Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date)));
 
-      // Group by caregiver
       const caregiverMap = new Map<string, CaregiverStats>();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       logs.forEach((log: any) => {
         if (log.caregiver_id && log.status === "taken") {
           const existing = caregiverMap.get(log.caregiver_id) || {
@@ -121,12 +105,11 @@ export default function ReportsPage() {
         }
       });
 
-      // Fetch attendance for shift hours
       const { data: attendance } = await supabase
         .from("attendance_logs")
         .select("caregiver_id, time_in, time_out")
-        .gte("date", startDate.split("T")[0])
-        .lte("date", endDate.split("T")[0]);
+        .gte("date", startDate.toISOString().split("T")[0])
+        .lte("date", now.toISOString().split("T")[0]);
 
       if (attendance) {
         attendance.forEach((att) => {
@@ -140,8 +123,8 @@ export default function ReportsPage() {
 
       setCaregiverStats(Array.from(caregiverMap.values()).sort((a, b) => b.dispensed - a.dispensed));
 
-      // Group by medication
       const medMap = new Map<string, MedicationStats>();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       logs.forEach((log: any) => {
         const medName = log.patient_medication?.medication?.name;
         const medDosage = log.patient_medication?.medication?.dosage;
@@ -155,7 +138,6 @@ export default function ReportsPage() {
       });
       setMedicationStats(Array.from(medMap.values()).sort((a, b) => b.dispensed - a.dispensed));
 
-      // Fetch patient and caregiver counts
       const { count: patientCount } = await supabase.from("patients").select("*", { count: "exact", head: true });
       const { count: caregiverCount } = await supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "caregiver");
 
@@ -170,223 +152,187 @@ export default function ReportsPage() {
     }
 
     setLoading(false);
-  };
+  }, [dateRange, supabase]);
 
   useEffect(() => {
     fetchStats();
-  }, [dateRange]);
+  }, [fetchStats]);
 
   if (loading) {
     return (
       <DashboardLayout userRole="admin" userName={userName}>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full"></div>
+        <div className="space-y-5">
+          <div className="skeleton-shimmer h-20 rounded-2xl" />
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="skeleton-shimmer h-28 rounded-2xl" />
+            ))}
+          </div>
+          <div className="skeleton-shimmer h-80 rounded-2xl" />
         </div>
       </DashboardLayout>
     );
   }
 
-  const maxDaily = Math.max(...dailyStats.map((d) => d.dispensed + d.missed + d.pending), 1);
-
   return (
     <DashboardLayout userRole="admin" userName={userName}>
-      <div className="space-y-6 overflow-hidden">
+      <div className="space-y-5 max-w-full">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Reports & Analytics</h1>
-            <p className="text-slate-400">System performance and compliance reports</p>
-          </div>
-          <div className="flex items-center" style={{ gap: '12px' }}>
-            <button
-              onClick={() => setDateRange("week")}
-              style={{ padding: '12px 20px' }}
-              className={`rounded-xl font-medium transition-colors ${
-                dateRange === "week" ? "bg-purple-500 text-white" : "bg-[#1e293b] text-slate-400 hover:text-white"
-              }`}
-            >
-              Last 7 Days
-            </button>
-            <button
-              onClick={() => setDateRange("month")}
-              style={{ padding: '12px 20px' }}
-              className={`rounded-xl font-medium transition-colors ${
-                dateRange === "month" ? "bg-purple-500 text-white" : "bg-[#1e293b] text-slate-400 hover:text-white"
-              }`}
-            >
-              Last 30 Days
-            </button>
-            <button
-              onClick={() => setDateRange("all")}
-              style={{ padding: '12px 20px' }}
-              className={`rounded-xl font-medium transition-colors ${
-                dateRange === "all" ? "bg-purple-500 text-white" : "bg-[#1e293b] text-slate-400 hover:text-white"
-              }`}
-            >
-              All Time
-            </button>
+        <div className="glass-card p-5">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 min-w-0">
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold text-white truncate">Reports &amp; Analytics</h1>
+              <p className="text-sm text-[var(--text-muted)] truncate">System performance and compliance</p>
+            </div>
+            <RangeButtons range={dateRange} onChange={setDateRange} />
           </div>
         </div>
 
-        {/* Overview Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-5">
-          <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] p-6">
-            <p className="text-3xl font-bold text-white">{totals.totalDispensed}</p>
-            <p className="text-sm text-emerald-400 mt-1">Dispensed</p>
-          </div>
-          <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] p-6">
-            <p className="text-3xl font-bold text-white">{totals.totalMissed}</p>
-            <p className="text-sm text-red-400 mt-1">Missed</p>
-          </div>
-          <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] p-6">
-            <p className="text-3xl font-bold text-white">{totals.totalPending}</p>
-            <p className="text-sm text-amber-400 mt-1">Pending</p>
-          </div>
-          <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] p-6">
-            <p className="text-3xl font-bold text-white">{totals.complianceRate}%</p>
-            <p className="text-sm text-purple-400 mt-1">Compliance</p>
-          </div>
-          <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] p-6">
-            <p className="text-3xl font-bold text-white">{totals.totalPatients}</p>
-            <p className="text-sm text-blue-400 mt-1">Patients</p>
-          </div>
-          <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] p-6">
-            <p className="text-3xl font-bold text-white">{totals.totalCaregivers}</p>
-            <p className="text-sm text-slate-400 mt-1">Caregivers</p>
-          </div>
+        {/* Hero KPI row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <HeroCard
+            label="Compliance Rate"
+            value={totals.complianceRate}
+            unit="%"
+            subtitle={dateRange === "week" ? "Last 7 days" : dateRange === "month" ? "Last 30 days" : "Last 12 months"}
+            gradient={totals.complianceRate >= 90 ? "teal-emerald" : totals.complianceRate >= 70 ? "blue-cyan" : "violet-indigo"}
+          />
+          <HeroCard
+            label="Total Dispensed"
+            value={totals.totalDispensed}
+            subtitle="Medication events"
+            gradient="blue-cyan"
+          />
+          <HeroCard
+            label="Missed Doses"
+            value={totals.totalMissed}
+            subtitle="Requires attention"
+            gradient="blue-violet"
+          />
         </div>
 
-        {/* Daily Chart */}
-        <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Daily Activity</h2>
-          {dailyStats.length > 0 ? (
-            <div className="space-y-3">
-              {dailyStats.slice(-14).map((day) => (
-                <div key={day.date} className="flex items-center gap-4">
-                  <span className="text-sm text-slate-400 w-24 flex-shrink-0">
-                    {new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </span>
-                  <div className="flex-1 flex items-center gap-1 h-6">
-                    <div
-                      className="h-full bg-emerald-500 rounded-l"
-                      style={{ width: `${(day.dispensed / maxDaily) * 100}%` }}
-                      title={`Dispensed: ${day.dispensed}`}
-                    ></div>
-                    <div
-                      className="h-full bg-red-500"
-                      style={{ width: `${(day.missed / maxDaily) * 100}%` }}
-                      title={`Missed: ${day.missed}`}
-                    ></div>
-                    <div
-                      className="h-full bg-amber-500 rounded-r"
-                      style={{ width: `${(day.pending / maxDaily) * 100}%` }}
-                      title={`Pending: ${day.pending}`}
-                    ></div>
-                  </div>
-                  <span className="text-sm text-white w-16 text-right">
-                    {day.dispensed + day.missed + day.pending}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-slate-500 text-center py-8">No data available for selected period</p>
-          )}
-          <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-[#1e293b]">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-emerald-500 rounded"></div>
-              <span className="text-sm text-slate-400">Dispensed</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-red-500 rounded"></div>
-              <span className="text-sm text-slate-400">Missed</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-amber-500 rounded"></div>
-              <span className="text-sm text-slate-400">Pending</span>
-            </div>
-          </div>
+        {/* Stat strip */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatTile label="Pending" value={totals.totalPending} accent="amber" icon={<ClockIcon />} />
+          <StatTile label="Patients" value={totals.totalPatients} accent="cyan" icon={<UsersIcon />} />
+          <StatTile label="Caregivers" value={totals.totalCaregivers} accent="violet" icon={<StaffIcon />} />
+          <StatTile
+            label="Active medications"
+            value={medicationStats.length}
+            accent="emerald"
+            icon={<PillIcon />}
+          />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Caregiver Performance */}
-          <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] overflow-hidden">
-            <div className="p-4 border-b border-[#1e293b]">
-              <h2 className="text-lg font-semibold text-white">Caregiver Performance</h2>
-            </div>
+        {/* Daily activity + compliance donut */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <Panel
+            title="Daily Activity"
+            className="lg:col-span-2"
+            action={
+              <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)]">
+                <LegendSwatch color="#34d399" label="Dispensed" />
+                <LegendSwatch color="#fb7185" label="Missed" />
+                <LegendSwatch color="#fbbf24" label="Pending" />
+              </div>
+            }
+          >
+            {dailyStats.length > 0 ? (
+              <BarChart
+                height={200}
+                data={dailyStats.slice(-14).map((d) => ({
+                  label: new Date(d.date).toLocaleDateString("en-US", { day: "numeric" }),
+                  value: d.dispensed + d.missed + d.pending,
+                }))}
+                ariaLabel="Daily activity bar chart"
+              />
+            ) : (
+              <div className="text-center py-10 text-[var(--text-dim)] text-sm">No data available for selected period</div>
+            )}
+          </Panel>
+
+          <Panel title="Compliance">
+            <DonutChart
+              size={140}
+              centerValue={`${totals.complianceRate}%`}
+              centerLabel="rate"
+              segments={[
+                { label: "Dispensed", value: totals.totalDispensed, color: "#34d399" },
+                { label: "Missed", value: totals.totalMissed, color: "#fb7185" },
+                { label: "Pending", value: totals.totalPending, color: "#fbbf24" },
+              ]}
+            />
+          </Panel>
+        </div>
+
+        {/* Caregiver + Medication stats */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <Panel title="Caregiver Performance" bodyPadding="0">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-[#1e293b]">
-                    <th className="px-5 py-4 text-left text-xs font-semibold text-slate-400 uppercase">Caregiver</th>
-                    <th className="px-5 py-4 text-left text-xs font-semibold text-slate-400 uppercase">Dispensed</th>
-                    <th className="px-5 py-4 text-left text-xs font-semibold text-slate-400 uppercase">Hours</th>
+                  <tr className="bg-white/5">
+                    <Th>Caregiver</Th>
+                    <Th>Dispensed</Th>
+                    <Th>Hours</Th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#1e293b]">
+                <tbody className="divide-y divide-[var(--glass-border)]">
                   {caregiverStats.length > 0 ? (
                     caregiverStats.slice(0, 10).map((cg) => (
-                      <tr key={cg.id} className="hover:bg-[#1e293b]/50">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm">
-                              {cg.name.charAt(0)}
+                      <tr key={cg.id} className="hover:bg-white/5">
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--accent-emerald)] to-[var(--accent-blue)] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                              {cg.name.charAt(0).toUpperCase()}
                             </div>
-                            <span className="text-white">{cg.name}</span>
+                            <span className="text-sm text-white truncate">{cg.name}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-emerald-400 font-medium">{cg.dispensed}</td>
-                        <td className="px-4 py-3 text-slate-400">{cg.totalShiftHours.toFixed(1)}h</td>
+                        <td className="px-5 py-3 text-sm text-[var(--accent-emerald)] font-medium">{cg.dispensed}</td>
+                        <td className="px-5 py-3 text-sm text-[var(--text-muted)]">{cg.totalShiftHours.toFixed(1)}h</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={3} className="px-4 py-8 text-center text-slate-500">
-                        No caregiver data available
+                      <td colSpan={3} className="px-5 py-8 text-center text-[var(--text-dim)] text-sm">
+                        No caregiver data
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
-          </div>
+          </Panel>
 
-          {/* Medication Statistics */}
-          <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] overflow-hidden">
-            <div className="p-4 border-b border-[#1e293b]">
-              <h2 className="text-lg font-semibold text-white">Medication Statistics</h2>
-            </div>
+          <Panel title="Medication Statistics" bodyPadding="0">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-[#1e293b]">
-                    <th className="px-5 py-4 text-left text-xs font-semibold text-slate-400 uppercase">Medication</th>
-                    <th className="px-5 py-4 text-left text-xs font-semibold text-slate-400 uppercase">Dispensed</th>
-                    <th className="px-5 py-4 text-left text-xs font-semibold text-slate-400 uppercase">Missed</th>
-                    <th className="px-5 py-4 text-left text-xs font-semibold text-slate-400 uppercase">Rate</th>
+                  <tr className="bg-white/5">
+                    <Th>Medication</Th>
+                    <Th>Dispensed</Th>
+                    <Th>Missed</Th>
+                    <Th>Rate</Th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#1e293b]">
+                <tbody className="divide-y divide-[var(--glass-border)]">
                   {medicationStats.length > 0 ? (
                     medicationStats.slice(0, 10).map((med, idx) => {
                       const total = med.dispensed + med.missed;
                       const rate = total > 0 ? Math.round((med.dispensed / total) * 100) : 100;
                       return (
-                        <tr key={idx} className="hover:bg-[#1e293b]/50">
-                          <td className="px-4 py-3">
-                            <div>
-                              <p className="text-white font-medium">{med.name}</p>
-                              <p className="text-xs text-slate-500">{med.dosage}</p>
-                            </div>
+                        <tr key={idx} className="hover:bg-white/5">
+                          <td className="px-5 py-3 min-w-0">
+                            <p className="text-sm text-white font-medium truncate">{med.name}</p>
+                            <p className="text-xs text-[var(--text-dim)] truncate">{med.dosage}</p>
                           </td>
-                          <td className="px-4 py-3 text-emerald-400">{med.dispensed}</td>
-                          <td className="px-4 py-3 text-red-400">{med.missed}</td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              rate >= 90 ? "bg-emerald-500/20 text-emerald-400" :
-                              rate >= 70 ? "bg-amber-500/20 text-amber-400" :
-                              "bg-red-500/20 text-red-400"
-                            }`}>
+                          <td className="px-5 py-3 text-sm text-[var(--accent-emerald)]">{med.dispensed}</td>
+                          <td className="px-5 py-3 text-sm text-[var(--accent-rose)]">{med.missed}</td>
+                          <td className="px-5 py-3">
+                            <span
+                              className={`badge ${rate >= 90 ? "badge-emerald" : rate >= 70 ? "badge-amber" : "badge-rose"}`}
+                            >
                               {rate}%
                             </span>
                           </td>
@@ -395,119 +341,91 @@ export default function ReportsPage() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
-                        No medication data available
+                      <td colSpan={4} className="px-5 py-8 text-center text-[var(--text-dim)] text-sm">
+                        No medication data
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
-
-        {/* Compliance Summary */}
-        <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Compliance Summary</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="relative w-32 h-32 mx-auto mb-4">
-                <svg className="w-full h-full transform -rotate-90">
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    fill="none"
-                    stroke="#1e293b"
-                    strokeWidth="12"
-                  />
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    fill="none"
-                    stroke={totals.complianceRate >= 90 ? "#10b981" : totals.complianceRate >= 70 ? "#f59e0b" : "#ef4444"}
-                    strokeWidth="12"
-                    strokeDasharray={`${(totals.complianceRate / 100) * 352} 352`}
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-3xl font-bold text-white">{totals.complianceRate}%</span>
-                </div>
-              </div>
-              <p className="text-slate-400">Overall Compliance Rate</p>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-slate-400">On-Time Dispensing</span>
-                  <span className="text-emerald-400 font-medium">{totals.totalDispensed}</span>
-                </div>
-                <div className="w-full bg-[#1e293b] rounded-full h-2">
-                  <div
-                    className="h-2 bg-emerald-500 rounded-full"
-                    style={{ width: `${(totals.totalDispensed / (totals.totalDispensed + totals.totalMissed + totals.totalPending || 1)) * 100}%` }}
-                  ></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-slate-400">Missed Doses</span>
-                  <span className="text-red-400 font-medium">{totals.totalMissed}</span>
-                </div>
-                <div className="w-full bg-[#1e293b] rounded-full h-2">
-                  <div
-                    className="h-2 bg-red-500 rounded-full"
-                    style={{ width: `${(totals.totalMissed / (totals.totalDispensed + totals.totalMissed + totals.totalPending || 1)) * 100}%` }}
-                  ></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-slate-400">Pending</span>
-                  <span className="text-amber-400 font-medium">{totals.totalPending}</span>
-                </div>
-                <div className="w-full bg-[#1e293b] rounded-full h-2">
-                  <div
-                    className="h-2 bg-amber-500 rounded-full"
-                    style={{ width: `${(totals.totalPending / (totals.totalDispensed + totals.totalMissed + totals.totalPending || 1)) * 100}%` }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-[#1e293b] rounded-xl p-4">
-              <h3 className="text-white font-medium mb-3">Quick Insights</h3>
-              <ul className="space-y-2 text-sm">
-                <li className="flex items-start gap-2">
-                  <svg className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="text-slate-300">
-                    {totals.complianceRate >= 90 ? "Excellent compliance rate!" : totals.complianceRate >= 70 ? "Good compliance, room for improvement" : "Compliance needs attention"}
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="text-slate-300">
-                    {caregiverStats.length} active caregivers in period
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <svg className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  <span className="text-slate-300">
-                    {medicationStats.length} medications tracked
-                  </span>
-                </li>
-              </ul>
-            </div>
-          </div>
+          </Panel>
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+function RangeButtons({ range, onChange }: { range: Range; onChange: (v: Range) => void }) {
+  const options: { value: Range; label: string }[] = [
+    { value: "week", label: "7 days" },
+    { value: "month", label: "30 days" },
+    { value: "all", label: "All time" },
+  ];
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {options.map((o) => {
+        const active = range === o.value;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className={`px-3.5 py-2 rounded-lg text-sm font-medium border transition-colors whitespace-nowrap ${
+              active
+                ? "bg-[var(--accent-violet)]/20 border-[var(--accent-violet)]/40 text-[var(--accent-violet)]"
+                : "bg-white/5 border-[var(--glass-border)] text-[var(--text-muted)] hover:text-white hover:bg-white/10"
+            }`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function LegendSwatch({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+      {label}
+    </span>
+  );
+}
+
+function Th({ children }: { children: React.ReactNode }) {
+  return (
+    <th className="px-5 py-3 text-left text-[11px] font-semibold text-[var(--text-dim)] uppercase tracking-wider whitespace-nowrap">
+      {children}
+    </th>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+function UsersIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+function StaffIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+    </svg>
+  );
+}
+function PillIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+    </svg>
   );
 }

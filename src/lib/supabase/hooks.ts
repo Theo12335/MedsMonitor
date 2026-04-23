@@ -378,6 +378,183 @@ export function useAttendance() {
   return { attendance, loading, error, clockIn, clockOut };
 }
 
+// Admin dashboard data — KPIs + trend series for last 7 days
+export interface AdminDashboardData {
+  totalPatients: number;
+  totalCaregivers: number;
+  dispensedToday: number;
+  pendingToday: number;
+  missedToday: number;
+  lowStockAlerts: number;
+  activeShifts: number;
+  patientsDelta: number;
+  adherenceRate: number; // 0..100
+  onTimeRate: number; // 0..100
+  dailyDispensed: number[]; // last 7 days, oldest → newest
+  dailyMissed: number[]; // last 7 days, oldest → newest
+  dayLabels: string[]; // "Mon", "Tue", ...
+}
+
+const EMPTY_ADMIN_DATA: AdminDashboardData = {
+  totalPatients: 0,
+  totalCaregivers: 0,
+  dispensedToday: 0,
+  pendingToday: 0,
+  missedToday: 0,
+  lowStockAlerts: 0,
+  activeShifts: 0,
+  patientsDelta: 0,
+  adherenceRate: 0,
+  onTimeRate: 0,
+  dailyDispensed: [0, 0, 0, 0, 0, 0, 0],
+  dailyMissed: [0, 0, 0, 0, 0, 0, 0],
+  dayLabels: ["", "", "", "", "", "", ""],
+};
+
+export function useAdminDashboardData() {
+  const [data, setData] = useState<AdminDashboardData>(EMPTY_ADMIN_DATA);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAll = async () => {
+      try {
+        const now = new Date();
+        const startOfToday = new Date(now);
+        startOfToday.setHours(0, 0, 0, 0);
+        const endOfToday = new Date(now);
+        endOfToday.setHours(23, 59, 59, 999);
+
+        // Window: last 7 full days including today
+        const weekStart = new Date(startOfToday);
+        weekStart.setDate(weekStart.getDate() - 6);
+
+        // Week-over-week delta window
+        const prevWeekStart = new Date(weekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        const [
+          { count: patientCount },
+          { count: caregiverCount },
+          { count: lowStockCount },
+          { count: activeShiftCount },
+          { count: dispensedTodayCount },
+          { count: pendingTodayCount },
+          { count: missedTodayCount },
+          { count: patientsCreatedThisWeek },
+          { data: weekLogs },
+        ] = await Promise.all([
+          supabase.from("patients").select("*", { count: "exact", head: true }),
+          supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "caregiver"),
+          supabase.from("drawers").select("*", { count: "exact", head: true }).in("status", ["low_stock", "empty"]),
+          supabase
+            .from("attendance_logs")
+            .select("*", { count: "exact", head: true })
+            .eq("date", startOfToday.toISOString().split("T")[0])
+            .is("time_out", null),
+          supabase
+            .from("medication_logs")
+            .select("*", { count: "exact", head: true })
+            .eq("status", "taken")
+            .gte("scheduled_time", startOfToday.toISOString())
+            .lte("scheduled_time", endOfToday.toISOString()),
+          supabase
+            .from("medication_logs")
+            .select("*", { count: "exact", head: true })
+            .eq("status", "pending")
+            .gte("scheduled_time", startOfToday.toISOString())
+            .lte("scheduled_time", endOfToday.toISOString()),
+          supabase
+            .from("medication_logs")
+            .select("*", { count: "exact", head: true })
+            .in("status", ["missed", "skipped"])
+            .gte("scheduled_time", startOfToday.toISOString())
+            .lte("scheduled_time", endOfToday.toISOString()),
+          supabase
+            .from("patients")
+            .select("*", { count: "exact", head: true })
+            .gte("created_at", prevWeekStart.toISOString())
+            .lt("created_at", weekStart.toISOString()),
+          supabase
+            .from("medication_logs")
+            .select("scheduled_time, actual_time, status")
+            .gte("scheduled_time", weekStart.toISOString())
+            .lte("scheduled_time", endOfToday.toISOString()),
+        ]);
+
+        // Build 7-day buckets
+        const dayKeys: string[] = [];
+        const dayLabels: string[] = [];
+        const dailyDispensed = Array(7).fill(0);
+        const dailyMissed = Array(7).fill(0);
+        const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(weekStart);
+          d.setDate(weekStart.getDate() + i);
+          dayKeys.push(d.toISOString().split("T")[0]);
+          dayLabels.push(dayNames[d.getDay()]);
+        }
+
+        let takenWeek = 0;
+        let missedWeek = 0;
+        let onTimeWeek = 0;
+
+        (weekLogs ?? []).forEach((log: { scheduled_time: string; actual_time: string | null; status: string }) => {
+          const key = new Date(log.scheduled_time).toISOString().split("T")[0];
+          const idx = dayKeys.indexOf(key);
+          if (idx === -1) return;
+
+          if (log.status === "taken") {
+            dailyDispensed[idx] += 1;
+            takenWeek += 1;
+            if (log.actual_time) {
+              const delta = Math.abs(new Date(log.actual_time).getTime() - new Date(log.scheduled_time).getTime());
+              if (delta <= 10 * 60 * 1000) onTimeWeek += 1;
+            }
+          } else if (log.status === "missed" || log.status === "skipped") {
+            dailyMissed[idx] += 1;
+            missedWeek += 1;
+          } else if (
+            log.status === "pending" &&
+            new Date(log.scheduled_time).getTime() < now.getTime() - 24 * 60 * 60 * 1000
+          ) {
+            dailyMissed[idx] += 1;
+            missedWeek += 1;
+          }
+        });
+
+        const adherenceDenom = takenWeek + missedWeek;
+        const adherenceRate = adherenceDenom > 0 ? Math.round((takenWeek / adherenceDenom) * 100) : 0;
+        const onTimeRate = takenWeek > 0 ? Math.round((onTimeWeek / takenWeek) * 100) : 0;
+
+        setData({
+          totalPatients: patientCount ?? 0,
+          totalCaregivers: caregiverCount ?? 0,
+          dispensedToday: dispensedTodayCount ?? 0,
+          pendingToday: pendingTodayCount ?? 0,
+          missedToday: missedTodayCount ?? 0,
+          lowStockAlerts: lowStockCount ?? 0,
+          activeShifts: activeShiftCount ?? 0,
+          patientsDelta: patientsCreatedThisWeek ?? 0,
+          adherenceRate,
+          onTimeRate,
+          dailyDispensed,
+          dailyMissed,
+          dayLabels,
+        });
+      } catch (err) {
+        console.error("Failed to fetch admin dashboard data:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAll();
+  }, []);
+
+  return { data, loading };
+}
+
 // Helper to get dashboard stats
 export function useDashboardStats() {
   const [stats, setStats] = useState({

@@ -1,6 +1,7 @@
 "use client";
 
 import DashboardLayout from "@/components/DashboardLayout";
+import StatTile from "@/components/dashboard/StatTile";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useProfile, usePatients } from "@/lib/supabase/hooks";
@@ -48,7 +49,6 @@ export default function PatientsPage() {
 
   const userName = profile?.name || "Loading...";
 
-  // Medication form state
   const [medFormData, setMedFormData] = useState({
     medication_id: "",
     dosage: "",
@@ -58,211 +58,122 @@ export default function PatientsPage() {
     end_date: "",
   });
 
-  // Fetch all available medications
   const fetchMedications = async () => {
-    const { data } = await supabase
-      .from("medications")
-      .select("id, name, dosage, drawer_location")
-      .order("name");
+    const { data } = await supabase.from("medications").select("id, name, dosage, drawer_location").order("name");
     if (data) setMedications(data);
   };
 
-  // Fetch patient's current medications
   const fetchPatientMedications = async (patientId: string) => {
     const { data } = await supabase
       .from("patient_medications")
-      .select(`
-        id,
-        dosage,
-        frequency,
-        scheduled_times,
-        start_date,
-        end_date,
-        medication:medications(id, name, dosage, drawer_location)
-      `)
+      .select(`id, dosage, frequency, scheduled_times, start_date, end_date, medication:medications(id, name, dosage, drawer_location)`)
       .eq("patient_id", patientId);
-
-    if (data) {
-      setPatientMeds(data as unknown as PatientMedication[]);
-    }
+    if (data) setPatientMeds(data as unknown as PatientMedication[]);
   };
 
-  useEffect(() => {
-    fetchMedications();
-  }, []);
+  useEffect(() => { fetchMedications(); }, []);
 
   useEffect(() => {
     const fetchPatientMedicationsData = async () => {
       if (patients.length === 0) return;
-
       const today = new Date();
       const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
       const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
 
       const enrichedPatients: PatientWithMeds[] = await Promise.all(
         patients.map(async (patient) => {
-          const { count: medCount } = await supabase
-            .from("patient_medications")
-            .select("*", { count: "exact", head: true })
-            .eq("patient_id", patient.id);
-
-          const { count: pendingCount } = await supabase
-            .from("medication_logs")
-            .select("*", { count: "exact", head: true })
-            .eq("patient_id", patient.id)
-            .eq("status", "pending")
-            .gte("scheduled_time", startOfDay)
-            .lte("scheduled_time", endOfDay);
-
-          return {
-            ...patient,
-            medicationCount: medCount || 0,
-            pendingToday: pendingCount || 0,
-          };
+          const { count: medCount } = await supabase.from("patient_medications").select("*", { count: "exact", head: true }).eq("patient_id", patient.id);
+          const { count: pendingCount } = await supabase.from("medication_logs").select("*", { count: "exact", head: true }).eq("patient_id", patient.id).eq("status", "pending").gte("scheduled_time", startOfDay).lte("scheduled_time", endOfDay);
+          return { ...patient, medicationCount: medCount || 0, pendingToday: pendingCount || 0 };
         })
       );
-
       setPatientsWithMeds(enrichedPatients);
     };
-
     fetchPatientMedicationsData();
   }, [patients, supabase]);
 
-  // Add medication to patient
   const handleAddMedication = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPatient) return;
     setFormLoading(true);
     setError("");
 
-    const { error } = await supabase.from("patient_medications").insert([
-      {
-        patient_id: selectedPatient.id,
-        medication_id: medFormData.medication_id,
-        dosage: medFormData.dosage,
-        frequency: medFormData.frequency,
-        scheduled_times: medFormData.scheduled_times,
-        start_date: medFormData.start_date,
-        end_date: medFormData.end_date || null,
-      },
-    ]);
+    const { error } = await supabase.from("patient_medications").insert([{
+      patient_id: selectedPatient.id,
+      medication_id: medFormData.medication_id,
+      dosage: medFormData.dosage,
+      frequency: medFormData.frequency,
+      scheduled_times: medFormData.scheduled_times,
+      start_date: medFormData.start_date,
+      end_date: medFormData.end_date || null,
+    }]);
 
     if (error) {
       setError(error.message);
     } else {
       setSuccess("Medication schedule added!");
-      setMedFormData({
-        medication_id: "",
-        dosage: "",
-        frequency: "Once daily",
-        scheduled_times: ["08:00"],
-        start_date: new Date().toISOString().split("T")[0],
-        end_date: "",
-      });
+      setMedFormData({ medication_id: "", dosage: "", frequency: "Once daily", scheduled_times: ["08:00"], start_date: new Date().toISOString().split("T")[0], end_date: "" });
       fetchPatientMedications(selectedPatient.id);
-      // Update medication count in list
-      setPatientsWithMeds(prev => prev.map(p =>
-        p.id === selectedPatient.id ? { ...p, medicationCount: p.medicationCount + 1 } : p
-      ));
+      setPatientsWithMeds(prev => prev.map(p => p.id === selectedPatient.id ? { ...p, medicationCount: p.medicationCount + 1 } : p));
       setTimeout(() => setSuccess(""), 3000);
     }
     setFormLoading(false);
   };
 
-  // Remove medication from patient
   const handleRemoveMedication = async (medId: string) => {
     if (!confirm("Remove this medication schedule?")) return;
-
     const { error } = await supabase.from("patient_medications").delete().eq("id", medId);
-
     if (error) {
       setError(error.message);
     } else {
       if (selectedPatient) {
         fetchPatientMedications(selectedPatient.id);
-        setPatientsWithMeds(prev => prev.map(p =>
-          p.id === selectedPatient.id ? { ...p, medicationCount: Math.max(0, p.medicationCount - 1) } : p
-        ));
+        setPatientsWithMeds(prev => prev.map(p => p.id === selectedPatient.id ? { ...p, medicationCount: Math.max(0, p.medicationCount - 1) } : p));
       }
     }
   };
 
-  // Open medications modal
   const openMedsModal = async (patient: PatientWithMeds) => {
     setSelectedPatient(patient);
     await fetchPatientMedications(patient.id);
     setShowMedsModal(true);
   };
 
-  // Add scheduled time
-  const addScheduledTime = () => {
-    setMedFormData({
-      ...medFormData,
-      scheduled_times: [...medFormData.scheduled_times, "12:00"],
-    });
-  };
-
-  // Remove scheduled time
-  const removeScheduledTime = (index: number) => {
-    if (medFormData.scheduled_times.length > 1) {
-      setMedFormData({
-        ...medFormData,
-        scheduled_times: medFormData.scheduled_times.filter((_, i) => i !== index),
-      });
-    }
-  };
-
-  // Update scheduled time
-  const updateScheduledTime = (index: number, value: string) => {
-    const newTimes = [...medFormData.scheduled_times];
-    newTimes[index] = value;
-    setMedFormData({ ...medFormData, scheduled_times: newTimes });
-  };
-
-  // Convert 24h to 12h format for display
-  const to12Hour = (time24: string) => {
+  const formatTimeDisplay = (time24: string) => {
     const [hourStr, minStr] = time24.split(':');
     let hour = parseInt(hourStr, 10);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     hour = hour % 12 || 12;
-    return { hour: hour.toString(), minute: minStr || '00', ampm };
+    return `${hour}:${minStr || '00'} ${ampm}`;
   };
 
-  // Format time for display (e.g., "8:00 AM")
-  const formatTimeDisplay = (time24: string) => {
-    const { hour, minute, ampm } = to12Hour(time24);
-    return `${hour}:${minute} ${ampm}`;
-  };
-
-  // Convert 12h to 24h format for storage
-  const to24Hour = (hour: string, minute: string, ampm: string) => {
-    let h = parseInt(hour, 10);
-    if (ampm === 'PM' && h !== 12) h += 12;
-    if (ampm === 'AM' && h === 12) h = 0;
-    return `${h.toString().padStart(2, '0')}:${minute}`;
-  };
-
-  // Update time with 12h components
-  const updateTimeComponent = (index: number, component: 'hour' | 'minute' | 'ampm', value: string) => {
-    const current = to12Hour(medFormData.scheduled_times[index]);
-    if (component === 'hour') current.hour = value;
-    if (component === 'minute') current.minute = value;
-    if (component === 'ampm') current.ampm = value;
-    const new24h = to24Hour(current.hour, current.minute, current.ampm);
-    updateScheduledTime(index, new24h);
-  };
-
-  const filteredPatients = patientsWithMeds.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.room_number.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredPatients = patientsWithMeds.filter(p =>
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.room_number.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Stats
+  const totalPatients = patientsWithMeds.length;
+  const totalPending = patientsWithMeds.reduce((sum, p) => sum + p.pendingToday, 0);
+  const allDone = patientsWithMeds.filter(p => p.pendingToday === 0).length;
 
   if (patientsLoading) {
     return (
       <DashboardLayout userRole="caregiver" userName={userName}>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full"></div>
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-2">
+              <div className="skeleton-shimmer h-8 w-56 rounded-lg"></div>
+              <div className="skeleton-shimmer h-4 w-72 rounded-lg"></div>
+            </div>
+            <div className="skeleton-shimmer h-12 w-64 rounded-xl"></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[1, 2, 3].map(i => <div key={i} className="skeleton-shimmer h-28 rounded-2xl"></div>)}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="skeleton-shimmer h-56 rounded-2xl"></div>)}
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -270,177 +181,186 @@ export default function PatientsPage() {
 
   return (
     <DashboardLayout userRole="caregiver" userName={userName}>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-full">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">Patient List</h1>
-            <p className="text-slate-400">Manage patients and medication schedules</p>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Patient Management</h1>
+            <p className="text-[var(--text-muted)] mt-1">{totalPatients} patients under your care</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search patients..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 bg-[#1e293b] border border-[#334155] rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 w-64"
-              />
-            </div>
+          <div className="search-wrapper w-full lg:w-80">
+            <svg className="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search patients by name or room..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
           </div>
         </div>
 
-        {/* Messages */}
+        {/* Alerts */}
         {success && (
-          <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400">{success}</div>
+          <div className="p-4 bg-[var(--accent-emerald)]/10 border border-[var(--accent-emerald)]/30 rounded-xl text-[var(--accent-emerald)] flex items-center gap-3 animate-fadeIn">
+            <div className="w-8 h-8 bg-[var(--accent-emerald)]/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            {success}
+          </div>
         )}
         {error && (
-          <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400">{error}</div>
+          <div className="p-4 bg-[var(--accent-rose)]/10 border border-[var(--accent-rose)]/30 rounded-xl text-[var(--accent-rose)] flex items-center gap-3 animate-fadeIn">
+            <div className="w-8 h-8 bg-[var(--accent-rose)]/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            {error}
+          </div>
         )}
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] p-5">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">{patientsWithMeds.length}</p>
-                <p className="text-sm text-slate-400">Total Patients</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] p-5">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">
-                  {patientsWithMeds.reduce((sum, p) => sum + p.pendingToday, 0)}
-                </p>
-                <p className="text-sm text-slate-400">Pending Medications</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-[#0f172a] rounded-xl border border-[#1e293b] p-5">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">
-                  {patientsWithMeds.filter((p) => p.pendingToday === 0).length}
-                </p>
-                <p className="text-sm text-slate-400">All Meds Given</p>
-              </div>
-            </div>
-          </div>
+          <StatTile
+            label="Total Patients"
+            value={totalPatients}
+            accent="cyan"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            }
+          />
+          <StatTile
+            label="Pending Today"
+            value={totalPending}
+            accent="amber"
+            emphasize={totalPending > 0}
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+          />
+          <StatTile
+            label="Completed All Meds"
+            value={allDone}
+            accent="emerald"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+          />
         </div>
 
         {/* Patient Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredPatients.map((patient) => (
-            <div
-              key={patient.id}
-              className="bg-[#0f172a] rounded-xl border border-[#1e293b] p-5 hover:border-emerald-500/50 transition-all"
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-14 h-14 flex-shrink-0 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">
-                  {patient.name.split(" ").map((n) => n[0]).join("")}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-white truncate">{patient.name}</h3>
-                  <p className="text-sm text-slate-400">Room {patient.room_number}</p>
-                </div>
-                {patient.pendingToday > 0 && (
-                  <div className="px-2 py-1 bg-amber-500/20 rounded-lg flex-shrink-0">
-                    <span className="text-xs font-medium text-amber-400 whitespace-nowrap">{patient.pendingToday} pending</span>
+        {filteredPatients.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {filteredPatients.map((patient) => {
+              const gradientColors = [
+                "from-[var(--accent-cyan)] to-[var(--accent-emerald)]",
+                "from-[var(--accent-violet)] to-[var(--accent-rose)]",
+                "from-[var(--accent-amber)] to-[var(--accent-rose)]",
+                "from-[var(--accent-blue)] to-[var(--accent-violet)]",
+              ];
+              const gradient = gradientColors[patient.name.charCodeAt(0) % 4];
+
+              return (
+                <div key={patient.id} className="glass-card hover:border-[var(--accent-cyan)]/30 transition-all group">
+                  <div className="p-5">
+                    <div className="flex items-start gap-4">
+                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-semibold text-lg flex-shrink-0`}>
+                        {patient.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-semibold text-white truncate">{patient.name}</h3>
+                        <p className="text-sm text-[var(--text-muted)]">Room {patient.room_number}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          {patient.pendingToday > 0 ? (
+                            <span className="badge badge-amber">{patient.pendingToday} pending</span>
+                          ) : (
+                            <span className="badge badge-emerald">All done</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 space-y-2.5 border-t border-[var(--glass-border)]">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-[var(--text-dim)]">Medications</span>
+                        <span className="text-white font-medium">{patient.medicationCount}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-[var(--text-dim)]">Admitted</span>
+                        <span className="text-[var(--text-secondary)]">{new Date(patient.admission_date).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 mt-4 pt-4 border-t border-[var(--glass-border)]">
+                      <button
+                        onClick={() => openMedsModal(patient)}
+                        className="btn btn-ghost flex-1 text-xs"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Schedule
+                      </button>
+                      <button
+                        onClick={() => window.location.href = `/dashboard/caregiver/dispense?patient=${patient.id}`}
+                        className="btn btn-primary flex-1 text-xs"
+                      >
+                        Dispense
+                      </button>
+                    </div>
                   </div>
-                )}
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-[#1e293b]">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400">Medications</span>
-                  <span className="text-white font-medium">{patient.medicationCount}</span>
                 </div>
-                <div className="flex items-center justify-between text-sm mt-2">
-                  <span className="text-slate-400">Admitted</span>
-                  <span className="text-white font-medium">
-                    {new Date(patient.admission_date).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="mt-4 pt-4 border-t border-[#1e293b] flex gap-2">
-                <button
-                  onClick={() => openMedsModal(patient)}
-                  className="flex-1 py-2 px-3 bg-emerald-500/20 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/30 transition-colors flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Schedule
-                </button>
-                <button
-                  onClick={() => {
-                    window.location.href = `/dashboard/caregiver/dispense?patient=${patient.id}`;
-                  }}
-                  className="flex-1 py-2 px-3 bg-purple-500/20 text-purple-400 rounded-lg text-sm font-medium hover:bg-purple-500/30 transition-colors flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                  </svg>
-                  Dispense
-                </button>
-              </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="glass-card p-12 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-[var(--bg-elevated)] rounded-2xl flex items-center justify-center">
+              <svg className="w-8 h-8 text-[var(--text-dim)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
             </div>
-          ))}
-        </div>
-
-        {filteredPatients.length === 0 && (
-          <div className="text-center py-12 text-slate-500">
-            <svg className="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <p>No patients found</p>
+            <p className="text-white font-medium mb-1">No patients found</p>
+            <p className="text-sm text-[var(--text-dim)]">Try adjusting your search criteria</p>
           </div>
         )}
 
-        {/* Medications Schedule Modal */}
+        {/* Medication Modal */}
         {showMedsModal && selectedPatient && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-[#0f172a] rounded-2xl border border-[#1e293b] max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6 border-b border-[#1e293b] flex items-center justify-between sticky top-0 bg-[#0f172a] z-10">
-                <div>
-                  <h2 className="text-xl font-semibold text-white">{selectedPatient.name}</h2>
-                  <p className="text-sm text-slate-400">Medication Schedule - Room {selectedPatient.room_number}</p>
+          <div
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowMedsModal(false)}
+          >
+            <div
+              className="bg-[var(--bg-card)] border border-[var(--glass-border)] rounded-2xl max-w-xl w-full max-h-[85vh] overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="p-5 border-b border-[var(--glass-border)] flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--accent-cyan)] to-[var(--accent-emerald)] flex items-center justify-center text-white font-semibold">
+                    {selectedPatient.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">{selectedPatient.name}</h2>
+                    <p className="text-sm text-[var(--text-muted)]">Room {selectedPatient.room_number}</p>
+                  </div>
                 </div>
                 <button
-                  onClick={() => {
-                    setShowMedsModal(false);
-                    setSelectedPatient(null);
-                    setPatientMeds([]);
-                    setError("");
-                  }}
-                  className="p-2 text-slate-400 hover:text-white"
+                  onClick={() => { setShowMedsModal(false); setSelectedPatient(null); setPatientMeds([]); setError(""); }}
+                  className="p-2 text-[var(--text-dim)] hover:text-white hover:bg-[var(--bg-elevated)] rounded-lg transition-colors"
+                  aria-label="Close modal"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -448,45 +368,45 @@ export default function PatientsPage() {
                 </button>
               </div>
 
-              <div className="p-6 space-y-6">
-                {/* Error/Success Messages */}
+              {/* Modal Body */}
+              <div className="p-5 space-y-6 max-h-[calc(85vh-80px)] overflow-y-auto">
                 {error && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">{error}</div>
+                  <div className="p-3 bg-[var(--accent-rose)]/10 border border-[var(--accent-rose)]/30 rounded-xl text-[var(--accent-rose)] text-sm flex items-center gap-2">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {error}
+                  </div>
                 )}
 
                 {/* Current Medications */}
                 <div>
-                  <h3 className="text-lg font-medium text-white mb-3">Current Medications</h3>
+                  <h3 className="text-sm font-semibold text-white mb-3">Current Medications</h3>
                   {patientMeds.length > 0 ? (
                     <div className="space-y-3">
                       {patientMeds.map((pm) => (
-                        <div key={pm.id} className="p-4 bg-[#1e293b] rounded-xl">
+                        <div key={pm.id} className="p-4 bg-[var(--bg-elevated)] rounded-xl border border-[var(--glass-border)]">
                           <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <p className="text-white font-medium">{pm.medication.name}</p>
-                                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-xs">
-                                  Drawer {pm.medication.drawer_location}
-                                </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium text-white">{pm.medication.name}</span>
+                                <span className="badge badge-cyan">Drawer {pm.medication.drawer_location}</span>
                               </div>
-                              <p className="text-sm text-slate-400 mt-1">{pm.dosage} - {pm.frequency}</p>
-                              <div className="flex flex-wrap gap-2 mt-2">
+                              <p className="text-xs text-[var(--text-muted)] mt-1">{pm.dosage} • {pm.frequency}</p>
+                              <div className="flex flex-wrap gap-1.5 mt-2">
                                 {pm.scheduled_times.map((time, i) => (
-                                  <span key={i} className="px-2 py-1 bg-[#0f172a] rounded text-xs text-slate-300">
+                                  <span key={i} className="px-2 py-0.5 bg-[var(--bg-card)] rounded-md text-xs text-[var(--text-secondary)]">
                                     {formatTimeDisplay(time)}
                                   </span>
                                 ))}
                               </div>
-                              <p className="text-xs text-slate-500 mt-2">
-                                From: {new Date(pm.start_date).toLocaleDateString()}
-                                {pm.end_date && ` to ${new Date(pm.end_date).toLocaleDateString()}`}
-                              </p>
                             </div>
                             <button
                               onClick={() => handleRemoveMedication(pm.id)}
-                              className="p-2 text-red-400 hover:text-red-300 flex-shrink-0"
+                              className="p-2 text-[var(--accent-rose)] hover:bg-[var(--accent-rose)]/10 rounded-lg transition-colors flex-shrink-0"
+                              aria-label="Remove medication"
                             >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                               </svg>
                             </button>
@@ -495,49 +415,49 @@ export default function PatientsPage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-slate-500 text-sm py-4 text-center bg-[#1e293b] rounded-xl">No medications scheduled</p>
+                    <div className="p-6 bg-[var(--bg-elevated)] rounded-xl text-center">
+                      <p className="text-sm text-[var(--text-dim)]">No medications scheduled</p>
+                    </div>
                   )}
                 </div>
 
                 {/* Add Medication Form */}
-                <div className="border-t border-[#1e293b] pt-6">
-                  <h3 className="text-lg font-medium text-white mb-4">Add New Schedule</h3>
+                <div className="border-t border-[var(--glass-border)] pt-6">
+                  <h3 className="text-sm font-semibold text-white mb-4">Add New Medication</h3>
                   <form onSubmit={handleAddMedication} className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-400 mb-2">Medication</label>
+                      <label className="block text-xs text-[var(--text-dim)] mb-2">Medication</label>
                       <select
                         value={medFormData.medication_id}
-                        onChange={(e) => setMedFormData({ ...medFormData, medication_id: e.target.value })}
-                        className="w-full px-4 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                        onChange={e => setMedFormData({ ...medFormData, medication_id: e.target.value })}
+                        className="w-full px-4 py-3 bg-[var(--bg-elevated)] border border-[var(--glass-border)] rounded-xl text-white focus:outline-none focus:border-[var(--accent-cyan)]/50 transition-colors"
                         required
                       >
                         <option value="">Select medication...</option>
-                        {medications.map((med) => (
-                          <option key={med.id} value={med.id}>
-                            {med.name} {med.dosage} (Drawer {med.drawer_location})
-                          </option>
+                        {medications.map(m => (
+                          <option key={m.id} value={m.id}>{m.name} {m.dosage} (Drawer {m.drawer_location})</option>
                         ))}
                       </select>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-2">Dosage</label>
+                        <label className="block text-xs text-[var(--text-dim)] mb-2">Dosage</label>
                         <input
                           type="text"
                           value={medFormData.dosage}
-                          onChange={(e) => setMedFormData({ ...medFormData, dosage: e.target.value })}
-                          className="w-full px-4 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                          onChange={e => setMedFormData({ ...medFormData, dosage: e.target.value })}
+                          className="w-full px-4 py-3 bg-[var(--bg-elevated)] border border-[var(--glass-border)] rounded-xl text-white placeholder:text-[var(--text-dim)] focus:outline-none focus:border-[var(--accent-cyan)]/50 transition-colors"
                           placeholder="e.g., 1 tablet"
                           required
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-2">Frequency</label>
+                        <label className="block text-xs text-[var(--text-dim)] mb-2">Frequency</label>
                         <select
                           value={medFormData.frequency}
-                          onChange={(e) => setMedFormData({ ...medFormData, frequency: e.target.value })}
-                          className="w-full px-4 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                          onChange={e => setMedFormData({ ...medFormData, frequency: e.target.value })}
+                          className="w-full px-4 py-3 bg-[var(--bg-elevated)] border border-[var(--glass-border)] rounded-xl text-white focus:outline-none focus:border-[var(--accent-cyan)]/50 transition-colors"
                         >
                           <option>Once daily</option>
                           <option>Twice daily</option>
@@ -548,85 +468,24 @@ export default function PatientsPage() {
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-slate-400 mb-2">Scheduled Times</label>
-                      <div className="space-y-3">
-                        {medFormData.scheduled_times.map((time, index) => {
-                          const { hour, minute, ampm } = to12Hour(time);
-                          return (
-                            <div key={index} className="flex items-center gap-2">
-                              {/* Hour */}
-                              <select
-                                value={hour}
-                                onChange={(e) => updateTimeComponent(index, 'hour', e.target.value)}
-                                className="px-3 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
-                              >
-                                {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(h => (
-                                  <option key={h} value={h}>{h}</option>
-                                ))}
-                              </select>
-                              <span className="text-slate-400">:</span>
-                              {/* Minute */}
-                              <select
-                                value={minute}
-                                onChange={(e) => updateTimeComponent(index, 'minute', e.target.value)}
-                                className="px-3 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
-                              >
-                                {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0')).map(m => (
-                                  <option key={m} value={m}>{m}</option>
-                                ))}
-                              </select>
-                              {/* AM/PM */}
-                              <select
-                                value={ampm}
-                                onChange={(e) => updateTimeComponent(index, 'ampm', e.target.value)}
-                                className="px-3 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
-                              >
-                                <option value="AM">AM</option>
-                                <option value="PM">PM</option>
-                              </select>
-                              {medFormData.scheduled_times.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => removeScheduledTime(index)}
-                                  className="p-2 text-red-400 hover:text-red-300"
-                                >
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                        <button
-                          type="button"
-                          onClick={addScheduledTime}
-                          className="w-full py-2 border border-dashed border-[#334155] rounded-xl text-slate-400 hover:text-white hover:border-emerald-500 transition-colors text-sm"
-                        >
-                          + Add Another Time
-                        </button>
-                      </div>
-                    </div>
-
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-2">Start Date</label>
+                        <label className="block text-xs text-[var(--text-dim)] mb-2">Start Date</label>
                         <input
                           type="date"
                           value={medFormData.start_date}
-                          onChange={(e) => setMedFormData({ ...medFormData, start_date: e.target.value })}
-                          className="w-full px-4 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                          onChange={e => setMedFormData({ ...medFormData, start_date: e.target.value })}
+                          className="w-full px-4 py-3 bg-[var(--bg-elevated)] border border-[var(--glass-border)] rounded-xl text-white focus:outline-none focus:border-[var(--accent-cyan)]/50 transition-colors"
                           required
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-2">End Date (Optional)</label>
+                        <label className="block text-xs text-[var(--text-dim)] mb-2">End Date (Optional)</label>
                         <input
                           type="date"
                           value={medFormData.end_date}
-                          onChange={(e) => setMedFormData({ ...medFormData, end_date: e.target.value })}
-                          className="w-full px-4 py-3 bg-[#1e293b] border border-[#334155] rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                          onChange={e => setMedFormData({ ...medFormData, end_date: e.target.value })}
+                          className="w-full px-4 py-3 bg-[var(--bg-elevated)] border border-[var(--glass-border)] rounded-xl text-white focus:outline-none focus:border-[var(--accent-cyan)]/50 transition-colors"
                         />
                       </div>
                     </div>
@@ -634,9 +493,17 @@ export default function PatientsPage() {
                     <button
                       type="submit"
                       disabled={formLoading}
-                      className="w-full py-3 bg-emerald-500 text-white rounded-xl font-medium hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+                      className="btn btn-primary w-full mt-2"
                     >
-                      {formLoading ? "Adding..." : "Add Medication Schedule"}
+                      {formLoading ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Adding...
+                        </span>
+                      ) : "Add Medication"}
                     </button>
                   </form>
                 </div>

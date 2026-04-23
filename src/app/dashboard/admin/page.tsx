@@ -1,85 +1,73 @@
 "use client";
 
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState, useEffect } from "react";
+import Panel from "@/components/dashboard/Panel";
+import HeroCard from "@/components/dashboard/HeroCard";
+import StatTile from "@/components/dashboard/StatTile";
+import LineChart from "@/components/dashboard/charts/LineChart";
+import DonutChart from "@/components/dashboard/charts/DonutChart";
+import BarChart from "@/components/dashboard/charts/BarChart";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useProfile } from "@/lib/supabase/hooks";
-
-interface DashboardStats {
-  totalPatients: number;
-  totalCaregivers: number;
-  totalMedications: number;
-  pendingToday: number;
-  dispensedToday: number;
-  lowStockAlerts: number;
-  activeShifts: number;
-}
+import { useProfile, useAdminDashboardData } from "@/lib/supabase/hooks";
 
 interface RecentActivity {
   id: string;
-  type: "dispense" | "login" | "alert";
   message: string;
   time: string;
+  tone: "success" | "warn" | "info";
+}
+
+const SERVICES = [
+  { name: "Database", latency: "12ms" },
+  { name: "Auth", latency: "8ms" },
+  { name: "Storage", latency: "24ms" },
+  { name: "Hardware", latency: "online" },
+];
+
+function UsersIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+  );
+}
+
+function HeartIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
 }
 
 export default function AdminDashboard() {
   const { profile, loading: profileLoading } = useProfile();
-  const [stats, setStats] = useState<DashboardStats>({
-    totalPatients: 0,
-    totalCaregivers: 0,
-    totalMedications: 0,
-    pendingToday: 0,
-    dispensedToday: 0,
-    lowStockAlerts: 0,
-    activeShifts: 0,
-  });
+  const { data, loading: dataLoading } = useAdminDashboardData();
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
   const userName = profile?.name || "Loading...";
   const firstName = profile?.name?.split(" ")[0] || "Admin";
 
   useEffect(() => {
-    const fetchStats = async () => {
-      const today = new Date();
-      const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
-      const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
-
-      // Fetch all counts
-      const [
-        { count: patientCount },
-        { count: caregiverCount },
-        { count: medicationCount },
-        { count: pendingCount },
-        { count: dispensedCount },
-        { count: lowStockCount },
-        { count: activeShiftCount },
-      ] = await Promise.all([
-        supabase.from("patients").select("*", { count: "exact", head: true }),
-        supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "caregiver"),
-        supabase.from("medications").select("*", { count: "exact", head: true }),
-        supabase.from("medication_logs").select("*", { count: "exact", head: true })
-          .eq("status", "pending").gte("scheduled_time", startOfDay).lte("scheduled_time", endOfDay),
-        supabase.from("medication_logs").select("*", { count: "exact", head: true })
-          .eq("status", "taken").gte("scheduled_time", startOfDay).lte("scheduled_time", endOfDay),
-        supabase.from("drawers").select("*", { count: "exact", head: true })
-          .in("status", ["low_stock", "empty"]),
-        supabase.from("attendance_logs").select("*", { count: "exact", head: true })
-          .eq("date", new Date().toISOString().split("T")[0]).is("time_out", null),
-      ]);
-
-      setStats({
-        totalPatients: patientCount || 0,
-        totalCaregivers: caregiverCount || 0,
-        totalMedications: medicationCount || 0,
-        pendingToday: pendingCount || 0,
-        dispensedToday: dispensedCount || 0,
-        lowStockAlerts: lowStockCount || 0,
-        activeShifts: activeShiftCount || 0,
-      });
-
-      // Fetch recent medication logs for activity
+    const fetchActivity = async () => {
       const { data: logs } = await supabase
         .from("medication_logs")
         .select(`
@@ -91,235 +79,331 @@ export default function AdminDashboard() {
           caregiver:profiles(name)
         `)
         .order("updated_at", { ascending: false })
-        .limit(5);
+        .limit(6);
 
       if (logs) {
-        const activities: RecentActivity[] = logs.map((log: any) => ({
-          id: log.id,
-          type: "dispense" as const,
-          message: log.status === "taken"
-            ? `${log.caregiver?.name || "Caregiver"} dispensed medication to ${log.patient?.name || "Patient"}`
-            : `Medication pending for ${log.patient?.name || "Patient"}`,
-          time: log.actual_time || log.scheduled_time,
-        }));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const activities: RecentActivity[] = logs.map((log: any) => {
+          const tone: "success" | "warn" | "info" =
+            log.status === "taken" ? "success" : log.status === "pending" ? "warn" : "info";
+          return {
+            id: log.id,
+            message:
+              log.status === "taken"
+                ? `${log.caregiver?.name || "Caregiver"} dispensed to ${log.patient?.name || "Patient"}`
+                : `Pending dose for ${log.patient?.name || "Patient"}`,
+            time: log.actual_time || log.scheduled_time,
+            tone,
+          };
+        });
         setRecentActivity(activities);
       }
-
-      setLoading(false);
     };
-
-    fetchStats();
+    fetchActivity();
   }, [supabase]);
 
-  if (loading || profileLoading) {
+  const loading = profileLoading || dataLoading;
+
+  if (loading) {
     return (
       <DashboardLayout userRole="admin" userName="Loading...">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full"></div>
+        <div className="space-y-5">
+          <div className="skeleton-shimmer h-24 rounded-2xl" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1.4fr_1.4fr_1fr_1fr] gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="skeleton-shimmer h-32 rounded-2xl" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div className="lg:col-span-2 skeleton-shimmer h-72 rounded-2xl" />
+            <div className="skeleton-shimmer h-72 rounded-2xl" />
+          </div>
         </div>
       </DashboardLayout>
     );
   }
 
+  const todayTotal = data.dispensedToday + data.pendingToday + data.missedToday;
+
   return (
     <DashboardLayout userRole="admin" userName={userName}>
-      <div className="space-y-6 overflow-hidden">
-        {/* Welcome Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-white">
-              Welcome, <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">{firstName}</span>
-            </h1>
-            <p className="text-slate-400 mt-1">System overview and management</p>
-          </div>
-          <div className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 rounded-xl border border-purple-500/20">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-purple-500"></span>
-            </span>
-            <span className="text-purple-400 font-medium text-sm">System Online</span>
+      <div className="space-y-5 max-w-full">
+        {/* Welcome */}
+        <div className="glass-card p-5">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 min-w-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--accent-blue)] to-[var(--accent-cyan)] flex items-center justify-center shadow-lg flex-shrink-0">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold text-white truncate">Welcome back, {firstName}</h1>
+                <p className="text-sm text-[var(--text-muted)] truncate">
+                  {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2 bg-[var(--accent-emerald)]/10 rounded-xl border border-[var(--accent-emerald)]/20 flex-shrink-0">
+              <span className="w-2 h-2 rounded-full bg-[var(--accent-emerald)] animate-pulse-slow" />
+              <span className="text-sm font-medium text-[var(--accent-emerald)] whitespace-nowrap">All Systems Online</span>
+            </div>
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 rounded-2xl border border-blue-500/20 p-6">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-slate-400 text-sm font-medium">Patients</span>
-              <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-            </div>
-            <p className="text-3xl font-bold text-white">{stats.totalPatients}</p>
-            <p className="text-sm text-slate-500">Total registered</p>
+        {/* Hero + Stats row — 6-col grid: hero=2, stat=1 → 2+2+1+1 = 6 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+          <div className="lg:col-span-2 min-w-0">
+            <HeroCard
+              label="Adherence rate"
+              value={data.adherenceRate}
+              unit="%"
+              subtitle="Last 7 days"
+              gradient="blue-cyan"
+              icon={<HeartIcon />}
+            />
           </div>
-
-          <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 rounded-2xl border border-emerald-500/20 p-6">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-slate-400 text-sm font-medium">Caregivers</span>
-              <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-            </div>
-            <p className="text-3xl font-bold text-white">{stats.totalCaregivers}</p>
-            <p className="text-sm text-emerald-400">{stats.activeShifts} on shift</p>
+          <div className="lg:col-span-2 min-w-0">
+            <HeroCard
+              label="On-time rate"
+              value={data.onTimeRate}
+              unit="%"
+              subtitle="Within 10 minutes"
+              gradient="violet-indigo"
+              icon={<ClockIcon />}
+            />
           </div>
-
-          <div className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 rounded-2xl border border-amber-500/20 p-6">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-slate-400 text-sm font-medium">Today&apos;s Meds</span>
-              <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-            <p className="text-3xl font-bold text-white">{stats.dispensedToday}/{stats.dispensedToday + stats.pendingToday}</p>
-            <p className="text-sm text-amber-400">{stats.pendingToday} pending</p>
+          <div className="lg:col-span-1 min-w-0">
+            <StatTile
+              label="Patients"
+              value={data.totalPatients}
+              icon={<UsersIcon />}
+              accent="cyan"
+              delta={
+                data.patientsDelta > 0
+                  ? { value: `${data.patientsDelta} new`, direction: "up" }
+                  : undefined
+              }
+            />
           </div>
-
-          <div className="bg-gradient-to-br from-red-500/10 to-red-500/5 rounded-2xl border border-red-500/20 p-6">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-slate-400 text-sm font-medium">Alerts</span>
-              <div className="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-            </div>
-            <p className="text-3xl font-bold text-white">{stats.lowStockAlerts}</p>
-            <p className="text-sm text-red-400">Low stock items</p>
+          <div className="lg:col-span-1 min-w-0">
+            <StatTile
+              label="Low stock alerts"
+              value={data.lowStockAlerts}
+              icon={<AlertIcon />}
+              accent="rose"
+              delta={data.lowStockAlerts > 0 ? { value: "action", direction: "down" } : undefined}
+              emphasize={data.lowStockAlerts > 0}
+            />
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Quick Actions */}
-          <div className="lg:col-span-2 bg-[#0f172a] rounded-2xl border border-[#1e293b] p-6">
-            <h2 className="text-lg font-semibold text-white mb-5">Quick Actions</h2>
-            <div className="grid grid-cols-2 gap-5">
-              <a
-                href="/dashboard/admin/patients"
-                className="p-5 bg-[#1e293b] rounded-xl hover:bg-[#334155] transition-colors group"
-              >
-                <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                  </svg>
-                </div>
-                <p className="text-white font-medium">Add Patient</p>
-                <p className="text-sm text-slate-400">Register new patient</p>
-              </a>
+        {/* Trend chart + donut */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <Panel
+            title="Dispenses vs Missed Doses"
+            className="lg:col-span-2"
+            action={
+              <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)]">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[var(--accent-cyan)]" />
+                  Dispensed
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[var(--accent-rose)]" />
+                  Missed
+                </span>
+              </div>
+            }
+          >
+            <LineChart
+              height={220}
+              xLabels={data.dayLabels}
+              ariaLabel="Dispenses vs missed doses, last 7 days"
+              series={[
+                { label: "Dispensed", data: data.dailyDispensed, color: "#22d3ee", fill: true },
+                { label: "Missed", data: data.dailyMissed, color: "#fb7185", dashed: true },
+              ]}
+            />
+          </Panel>
 
-              <a
-                href="/dashboard/admin/staff"
-                className="p-5 bg-[#1e293b] rounded-xl hover:bg-[#334155] transition-colors group"
-              >
-                <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                  </svg>
-                </div>
-                <p className="text-white font-medium">Add Caregiver</p>
-                <p className="text-sm text-slate-400">Register new staff</p>
-              </a>
+          <Panel title="Today's Status">
+            <DonutChart
+              size={130}
+              centerValue={todayTotal > 0 ? `${Math.round((data.dispensedToday / todayTotal) * 100)}%` : "0%"}
+              centerLabel="done"
+              segments={[
+                { label: "Dispensed", value: data.dispensedToday, color: "#34d399" },
+                { label: "Pending", value: data.pendingToday, color: "#fbbf24" },
+                { label: "Missed", value: data.missedToday, color: "#fb7185" },
+              ]}
+            />
+          </Panel>
+        </div>
 
-              <a
-                href="/dashboard/admin/medications"
-                className="p-5 bg-[#1e293b] rounded-xl hover:bg-[#334155] transition-colors group"
-              >
-                <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                </div>
-                <p className="text-white font-medium">Add Medication</p>
-                <p className="text-sm text-slate-400">Add to inventory</p>
-              </a>
-
-              <a
-                href="/dashboard/admin/reports"
-                className="p-5 bg-[#1e293b] rounded-xl hover:bg-[#334155] transition-colors group"
-              >
-                <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <p className="text-white font-medium">View Reports</p>
-                <p className="text-sm text-slate-400">Analytics & insights</p>
-              </a>
-            </div>
+        {/* Quick actions */}
+        <Panel
+          title="Quick Actions"
+          action={<span className="text-xs text-[var(--text-dim)] hidden md:inline">Manage your healthcare system</span>}
+        >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <QuickAction
+              href="/dashboard/admin/patients"
+              label="Add Patient"
+              subtitle="Register new patient"
+              accent="blue"
+              icon={
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+              }
+            />
+            <QuickAction
+              href="/dashboard/admin/staff"
+              label="Manage Staff"
+              subtitle="Caregivers & roles"
+              accent="emerald"
+              icon={
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              }
+            />
+            <QuickAction
+              href="/dashboard/admin/medications"
+              label="Medications"
+              subtitle="Inventory & drawers"
+              accent="violet"
+              icon={
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                </svg>
+              }
+            />
+            <QuickAction
+              href="/dashboard/admin/reports"
+              label="Reports"
+              subtitle="Analytics & insights"
+              accent="amber"
+              icon={
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              }
+            />
           </div>
+        </Panel>
 
-          {/* Recent Activity */}
-          <div className="bg-[#0f172a] rounded-2xl border border-[#1e293b] p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Recent Activity</h2>
-            <div className="space-y-4">
-              {recentActivity.length > 0 ? (
-                recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-start gap-3">
-                    <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                      activity.type === "dispense" ? "bg-emerald-500" : "bg-blue-500"
-                    }`}></div>
+        {/* Bottom: Bar + Activity + System */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <Panel title="Doses by Day">
+            <BarChart
+              height={170}
+              data={data.dailyDispensed.map((v, i) => ({ label: data.dayLabels[i], value: v }))}
+              ariaLabel="Dispensed doses by day"
+            />
+          </Panel>
+
+          <Panel title="Recent Activity" bodyPadding="1rem">
+            {recentActivity.length > 0 ? (
+              <div className="space-y-1">
+                {recentActivity.map((a) => (
+                  <div key={a.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors min-w-0">
+                    <span
+                      className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                        a.tone === "success"
+                          ? "bg-[var(--accent-emerald)]"
+                          : a.tone === "warn"
+                          ? "bg-[var(--accent-amber)]"
+                          : "bg-[var(--accent-blue)]"
+                      }`}
+                    />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white break-words">{activity.message}</p>
-                      <p className="text-xs text-slate-500">
-                        {new Date(activity.time).toLocaleTimeString("en-US", {
-                          hour: "numeric",
-                          minute: "2-digit",
-                          hour12: true,
-                        })}
+                      <p className="text-xs text-[var(--text-secondary)] line-clamp-2">{a.message}</p>
+                      <p className="text-[11px] text-[var(--text-dim)] mt-0.5">
+                        {new Date(a.time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
                       </p>
                     </div>
                   </div>
-                ))
-              ) : (
-                <p className="text-slate-500 text-sm">No recent activity</p>
-              )}
-            </div>
-          </div>
-        </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-sm text-[var(--text-dim)]">No recent activity</p>
+              </div>
+            )}
+          </Panel>
 
-        {/* System Status */}
-        <div className="bg-[#0f172a] rounded-2xl border border-[#1e293b] p-6">
-          <h2 className="text-lg font-semibold text-white mb-5">System Status</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-            <div className="flex items-center gap-3 p-5 bg-[#1e293b] rounded-xl">
-              <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-              <div>
-                <p className="text-white font-medium">Database</p>
-                <p className="text-xs text-slate-400">Connected</p>
-              </div>
+          <Panel title="System" action={<span className="badge badge-emerald">All Operational</span>}>
+            <div className="space-y-3">
+              {SERVICES.map((s) => (
+                <div key={s.name} className="flex items-center justify-between gap-3 p-2.5 bg-[var(--bg-elevated)] rounded-lg min-w-0">
+                  <span className="text-sm text-white truncate">{s.name}</span>
+                  <span className="flex items-center gap-1.5 text-xs text-[var(--accent-emerald)] flex-shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-emerald)]" />
+                    {s.latency}
+                  </span>
+                </div>
+              ))}
             </div>
-            <div className="flex items-center gap-3 p-5 bg-[#1e293b] rounded-xl">
-              <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-              <div>
-                <p className="text-white font-medium">Auth Service</p>
-                <p className="text-xs text-slate-400">Operational</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-5 bg-[#1e293b] rounded-xl">
-              <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-              <div>
-                <p className="text-white font-medium">Storage Unit</p>
-                <p className="text-xs text-slate-400">Online</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-5 bg-[#1e293b] rounded-xl">
-              <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-              <div>
-                <p className="text-white font-medium">API</p>
-                <p className="text-xs text-slate-400">Healthy</p>
-              </div>
-            </div>
-          </div>
+          </Panel>
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+function QuickAction({
+  href,
+  label,
+  subtitle,
+  icon,
+  accent,
+}: {
+  href: string;
+  label: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  accent: "blue" | "emerald" | "violet" | "amber";
+}) {
+  const accentClasses: Record<typeof accent, { bg: string; text: string; border: string; hoverBg: string }> = {
+    blue: {
+      bg: "bg-[var(--accent-blue)]/15",
+      text: "text-[var(--accent-blue)]",
+      border: "hover:border-[var(--accent-blue)]/50",
+      hoverBg: "hover:bg-[var(--accent-blue)]/5",
+    },
+    emerald: {
+      bg: "bg-[var(--accent-emerald)]/15",
+      text: "text-[var(--accent-emerald)]",
+      border: "hover:border-[var(--accent-emerald)]/50",
+      hoverBg: "hover:bg-[var(--accent-emerald)]/5",
+    },
+    violet: {
+      bg: "bg-[var(--accent-violet)]/15",
+      text: "text-[var(--accent-violet)]",
+      border: "hover:border-[var(--accent-violet)]/50",
+      hoverBg: "hover:bg-[var(--accent-violet)]/5",
+    },
+    amber: {
+      bg: "bg-[var(--accent-amber)]/15",
+      text: "text-[var(--accent-amber)]",
+      border: "hover:border-[var(--accent-amber)]/50",
+      hoverBg: "hover:bg-[var(--accent-amber)]/5",
+    },
+  };
+  const c = accentClasses[accent];
+
+  return (
+    <a
+      href={href}
+      className={`group block p-4 bg-[var(--bg-elevated)] rounded-xl border border-[var(--glass-border)] transition-all min-w-0 ${c.border} ${c.hoverBg}`}
+    >
+      <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 group-hover:scale-105 transition-transform ${c.bg} ${c.text}`}>
+        {icon}
+      </div>
+      <p className="text-sm font-medium text-white truncate">{label}</p>
+      <p className="text-xs text-[var(--text-dim)] mt-0.5 truncate">{subtitle}</p>
+    </a>
   );
 }
