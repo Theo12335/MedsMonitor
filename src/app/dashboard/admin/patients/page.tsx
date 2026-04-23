@@ -184,9 +184,8 @@ export default function PatientManagementPage() {
       p.room_number.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const newThisWeek = patients.filter(
-    (p) => new Date(p.admission_date) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-  ).length;
+  const oneWeekAgo = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000);
+  const newThisWeek = patients.filter((p) => new Date(p.admission_date) >= oneWeekAgo).length;
   const roomsOccupied = new Set(patients.map((p) => p.room_number)).size;
 
   if (loading) {
