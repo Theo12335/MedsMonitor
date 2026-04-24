@@ -4,8 +4,9 @@ const capabilities = [
   {
     title: "Real-Time Telemetry",
     description: "Instantaneous data transmission for caregiver attendance and patient vitals.",
+    tone: "cyan" as const,
     icon: (
-      <svg style={{ width: '32px', height: '32px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
       </svg>
     ),
@@ -13,8 +14,9 @@ const capabilities = [
   {
     title: "Secure Protocol",
     description: "End-to-end encryption for all patient records and staff logs.",
+    tone: "blue" as const,
     icon: (
-      <svg style={{ width: '32px', height: '32px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
       </svg>
     ),
@@ -22,20 +24,27 @@ const capabilities = [
   {
     title: "Live Sync",
     description: "Multi-device synchronization ensures data consistency across the facility.",
+    tone: "emerald" as const,
     icon: (
-      <svg style={{ width: '32px', height: '32px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
     ),
   },
 ];
 
+const toneIcon: Record<"cyan" | "blue" | "emerald", string> = {
+  cyan: "text-[var(--accent-cyan)] bg-[var(--accent-cyan)]/10 ring-[var(--accent-cyan)]/30",
+  blue: "text-[var(--accent-blue)] bg-[var(--accent-blue)]/10 ring-[var(--accent-blue)]/30",
+  emerald: "text-[var(--accent-emerald)] bg-[var(--accent-emerald)]/10 ring-[var(--accent-emerald)]/30",
+};
+
 const features = [
   {
     title: "High-Density Visualization",
     description: "Our interface is designed for rapid information processing. LED-style status indicators allow for immediate recognition of critical patient needs.",
     icon: (
-      <svg style={{ width: '40px', height: '40px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
       </svg>
     ),
@@ -44,7 +53,7 @@ const features = [
     title: "Smart Storage Integration",
     description: "Physical smart storage units with LED indicators and weight sensors connect wirelessly to provide real-time inventory tracking and guided medication retrieval.",
     icon: (
-      <svg style={{ width: '40px', height: '40px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
       </svg>
     ),
@@ -53,49 +62,34 @@ const features = [
 
 export default function SystemCapabilities() {
   return (
-    <section style={{ padding: '96px 24px', backgroundColor: '#0a0f1c' }}>
-      <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
+    <section className="py-24 px-6 bg-[var(--bg-secondary)]">
+      <div className="max-w-[1280px] mx-auto">
         {/* Section Header */}
-        <div className="reveal" style={{ textAlign: 'center', marginBottom: '64px' }}>
-          <h2 style={{ fontSize: '36px', fontWeight: 700, color: 'white', marginBottom: '16px' }}>
+        <div className="reveal text-center mb-16">
+          <h2 className="text-[36px] font-bold text-white tracking-[-0.02em] mb-4">
             SYSTEM CAPABILITIES
           </h2>
-          <p style={{ color: '#94a3b8', maxWidth: '640px', margin: '0 auto', fontSize: '16px' }}>
+          <p className="text-[var(--text-secondary)] max-w-[640px] mx-auto text-base">
             Advanced features designed for modern healthcare facility management
           </p>
         </div>
 
         {/* Top Capabilities Grid */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: '32px',
-          marginBottom: '64px'
-        }}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
           {capabilities.map((capability, index) => (
             <div
               key={capability.title}
-              className={`reveal delay-${(index + 1) * 100}`}
-              style={{ textAlign: 'center', padding: '32px' }}
+              className={`reveal delay-${(index + 1) * 100} group text-center p-8`}
             >
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '72px',
-                height: '72px',
-                borderRadius: '50%',
-                backgroundColor: '#0f172a',
-                border: '1px solid #1e293b',
-                color: '#34d399',
-                marginBottom: '24px'
-              }}>
+              <div
+                className={`inline-flex items-center justify-center w-[72px] h-[72px] rounded-full ring-1 mb-6 transition-all duration-300 group-hover:scale-110 group-hover:shadow-[0_8px_32px_-4px_rgba(59,130,246,0.3)] ${toneIcon[capability.tone]}`}
+              >
                 {capability.icon}
               </div>
-              <h3 style={{ fontSize: '20px', fontWeight: 700, color: 'white', marginBottom: '12px' }}>
+              <h3 className="text-xl font-bold text-white mb-3">
                 {capability.title}
               </h3>
-              <p style={{ color: '#94a3b8', fontSize: '15px', lineHeight: 1.6 }}>
+              <p className="text-[var(--text-secondary)] text-[15px] leading-relaxed">
                 {capability.description}
               </p>
             </div>
@@ -103,38 +97,21 @@ export default function SystemCapabilities() {
         </div>
 
         {/* Feature Cards */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-          gap: '32px'
-        }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {features.map((feature, index) => (
             <div
               key={feature.title}
-              className={index === 0 ? "reveal-left" : "reveal-right"}
-              style={{
-                padding: '32px',
-                backgroundColor: '#0f172a',
-                borderRadius: '16px',
-                border: '1px solid #1e293b',
-                transition: 'border-color 0.3s'
-              }}
+              className={`${index === 0 ? "reveal-left" : "reveal-right"} p-8 rounded-2xl bg-[var(--bg-card)] border border-[var(--glass-border)] card-hover`}
             >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '24px' }}>
-                <div style={{
-                  flexShrink: 0,
-                  padding: '16px',
-                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(59, 130, 246, 0.2))',
-                  borderRadius: '16px',
-                  color: '#34d399'
-                }}>
+              <div className="flex items-start gap-5">
+                <div className="flex-shrink-0 p-4 rounded-xl text-[var(--accent-cyan)] bg-gradient-to-br from-[var(--accent-blue)]/15 to-[var(--accent-violet)]/15 border border-[var(--glass-border)]">
                   {feature.icon}
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '20px', fontWeight: 700, color: 'white', marginBottom: '12px' }}>
+                  <h3 className="text-xl font-bold text-white mb-3">
                     {feature.title}
                   </h3>
-                  <p style={{ color: '#94a3b8', lineHeight: 1.6, fontSize: '15px' }}>
+                  <p className="text-[var(--text-secondary)] leading-relaxed text-[15px]">
                     {feature.description}
                   </p>
                 </div>
@@ -144,37 +121,11 @@ export default function SystemCapabilities() {
         </div>
 
         {/* Hardware Integration Preview */}
-        <div className="reveal" style={{
-          marginTop: '64px',
-          padding: '32px',
-          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(59, 130, 246, 0.1))',
-          borderRadius: '16px',
-          border: '1px solid #1e293b'
-        }}>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            gap: '32px'
-          }}>
-            <div style={{ flexShrink: 0 }}>
-              <div style={{
-                width: '128px',
-                height: '128px',
-                backgroundColor: '#0f172a',
-                borderRadius: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '1px solid #1e293b'
-              }}>
-                <svg
-                  style={{ width: '64px', height: '64px', color: '#34d399' }}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+        <div className="reveal delay-200 mt-16 p-8 rounded-2xl border border-[var(--glass-border)] bg-gradient-to-br from-[var(--accent-blue)]/[0.06] via-[var(--accent-cyan)]/[0.04] to-[var(--accent-violet)]/[0.06]">
+          <div className="flex flex-row flex-wrap items-center gap-8">
+            <div className="flex-shrink-0">
+              <div className="w-32 h-32 rounded-2xl flex items-center justify-center bg-[var(--bg-card)] border border-[var(--glass-border)]">
+                <svg className="w-16 h-16 text-[var(--accent-cyan)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -184,46 +135,19 @@ export default function SystemCapabilities() {
                 </svg>
               </div>
             </div>
-            <div style={{ flex: 1, minWidth: '300px' }}>
-              <h3 style={{ fontSize: '24px', fontWeight: 700, color: 'white', marginBottom: '8px' }}>
-                Arduino-Powered Hardware
+            <div className="flex-1 min-w-[280px]">
+              <h3 className="text-2xl font-bold text-white mb-2">
+                ESP32-Powered Hardware
               </h3>
-              <p style={{ color: '#94a3b8', marginBottom: '16px', fontSize: '15px', lineHeight: 1.6 }}>
-                Our smart storage system uses Arduino microcontrollers for
+              <p className="text-[var(--text-secondary)] text-[15px] leading-relaxed mb-4">
+                Our smart storage system uses ESP32 microcontrollers for
                 precise weight sensing and LED control, communicating via
-                WiFi/Serial with this dashboard.
+                WebSocket with this dashboard.
               </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                <span style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#0f172a',
-                  borderRadius: '9999px',
-                  fontSize: '13px',
-                  color: '#34d399',
-                  border: '1px solid rgba(16, 185, 129, 0.3)'
-                }}>
-                  ESP32 Compatible
-                </span>
-                <span style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#0f172a',
-                  borderRadius: '9999px',
-                  fontSize: '13px',
-                  color: '#60a5fa',
-                  border: '1px solid rgba(59, 130, 246, 0.3)'
-                }}>
-                  WebSocket API
-                </span>
-                <span style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#0f172a',
-                  borderRadius: '9999px',
-                  fontSize: '13px',
-                  color: '#a78bfa',
-                  border: '1px solid rgba(139, 92, 246, 0.3)'
-                }}>
-                  Load Cells
-                </span>
+              <div className="flex flex-wrap gap-2">
+                <span className="badge badge-cyan">ESP32 Compatible</span>
+                <span className="badge badge-blue">WebSocket API</span>
+                <span className="badge badge-violet">Load Cells</span>
               </div>
             </div>
           </div>

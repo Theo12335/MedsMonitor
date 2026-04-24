@@ -2,9 +2,9 @@
 
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import ScrollRevealWrapper from "@/components/ScrollRevealWrapper";
 import Link from "next/link";
 
-// Mock patient medication data
 const patientMedications = [
   { id: 1, patient: "John Doe", room: "101A", medicine: "Aspirin 100mg", time: "8:00 AM", status: "taken" },
   { id: 2, patient: "John Doe", room: "101A", medicine: "Metformin 500mg", time: "12:00 PM", status: "pending" },
@@ -17,10 +17,9 @@ const stats = [
   {
     value: "3",
     label: "Medications Taken Today",
-    color: "#10b981",
-    bgColor: "rgba(16, 185, 129, 0.15)",
+    tone: "emerald" as const,
     icon: (
-      <svg style={{ width: '28px', height: '28px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
@@ -28,10 +27,9 @@ const stats = [
   {
     value: "2",
     label: "Pending Today",
-    color: "#f59e0b",
-    bgColor: "rgba(245, 158, 11, 0.15)",
+    tone: "amber" as const,
     icon: (
-      <svg style={{ width: '28px', height: '28px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
@@ -39,226 +37,161 @@ const stats = [
   {
     value: "12",
     label: "Active Patients",
-    color: "#3b82f6",
-    bgColor: "rgba(59, 130, 246, 0.15)",
+    tone: "blue" as const,
     icon: (
-      <svg style={{ width: '28px', height: '28px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
   },
 ];
 
+const statTone: Record<"emerald" | "amber" | "blue", string> = {
+  emerald: "text-[var(--accent-emerald)] bg-[var(--accent-emerald)]/10",
+  amber: "text-[var(--accent-amber)] bg-[var(--accent-amber)]/10",
+  blue: "text-[var(--accent-blue)] bg-[var(--accent-blue)]/10",
+};
+
 export default function PatientLogsPage() {
   return (
-    <main className="min-h-screen bg-[#030712]">
-      <Navbar />
-      <section style={{ padding: '96px 24px', backgroundColor: '#0a0f1c' }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-          {/* Section Header */}
-          <div style={{ marginBottom: '48px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-              <h1 style={{ fontSize: '36px', fontWeight: 700, color: 'white' }}>
+    <ScrollRevealWrapper>
+      <main className="min-h-screen bg-[var(--bg-primary)]">
+        <Navbar />
+        <section className="pt-32 pb-24 px-6">
+          <div className="max-w-[1280px] mx-auto">
+            {/* Section Header */}
+            <div className="reveal mb-12">
+              <h1 className="text-4xl md:text-5xl font-bold text-white tracking-[-0.02em] mb-3">
                 PATIENT LOGS
               </h1>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="text-[var(--text-secondary)] text-base">
+                  Medication administration records
+                </p>
+                <p className="text-[var(--text-muted)] text-sm font-mono">MODULE_LOGS_02</p>
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <p style={{ color: '#94a3b8', fontSize: '16px' }}>
-                MEDICATION ADMINISTRATION RECORDS
-              </p>
-              <p style={{ color: '#64748b', fontSize: '14px', fontFamily: 'monospace' }}>MODULE_LOGS_02</p>
-            </div>
-          </div>
 
-          {/* Login Prompt Card */}
-          <div style={{
-            padding: '48px',
-            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(59, 130, 246, 0.1))',
-            borderRadius: '16px',
-            border: '1px solid #1e293b',
-            marginBottom: '48px',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(59, 130, 246, 0.2))',
-              borderRadius: '50%',
-              margin: '0 auto 24px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '1px solid rgba(16, 185, 129, 0.3)'
-            }}>
-              <svg style={{ width: '40px', height: '40px', color: '#34d399' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-              </svg>
-            </div>
-            <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'white', marginBottom: '12px' }}>
-              View Your Records
-            </h2>
-            <p style={{ color: '#94a3b8', fontSize: '16px', marginBottom: '32px', maxWidth: '400px', margin: '0 auto 32px' }}>
-              Log in to view your personal medication schedule and history.
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
-              <Link
-                href="/login"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '14px 28px',
-                  backgroundColor: '#059669',
-                  color: 'white',
-                  fontWeight: 600,
-                  borderRadius: '12px',
-                  textDecoration: 'none',
-                  transition: 'all 0.3s',
-                  fontSize: '15px'
-                }}
-              >
-                Login as Patient
-                <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-              <Link
-                href="/login"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '14px 28px',
-                  backgroundColor: 'transparent',
-                  border: '1px solid #475569',
-                  color: 'white',
-                  fontWeight: 600,
-                  borderRadius: '12px',
-                  textDecoration: 'none',
-                  transition: 'all 0.3s',
-                  fontSize: '15px'
-                }}
-              >
-                Login as Caregiver
-              </Link>
-            </div>
-          </div>
-
-          {/* Stats Overview */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '24px',
-            marginBottom: '48px'
-          }}>
-            {stats.map((stat) => (
+            {/* Login Prompt Card */}
+            <div
+              className="reveal delay-100 glass-card p-10 sm:p-12 mb-12 text-center relative overflow-hidden"
+            >
               <div
-                key={stat.label}
+                className="absolute inset-0 opacity-60 pointer-events-none"
                 style={{
-                  padding: '28px',
-                  backgroundColor: '#0f172a',
-                  borderRadius: '16px',
-                  border: '1px solid #1e293b',
-                  transition: 'all 0.3s'
+                  background:
+                    "radial-gradient(ellipse 500px 200px at 50% 0%, rgba(34,211,238,0.12), transparent 70%)",
                 }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                  <div style={{
-                    width: '64px',
-                    height: '64px',
-                    backgroundColor: stat.bgColor,
-                    borderRadius: '16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: stat.color
-                  }}>
-                    {stat.icon}
-                  </div>
-                  <div>
-                    <p style={{ fontSize: '32px', fontWeight: 700, color: 'white', lineHeight: 1 }}>{stat.value}</p>
-                    <p style={{ fontSize: '14px', color: '#94a3b8', marginTop: '4px' }}>{stat.label}</p>
-                  </div>
+              />
+              <div className="relative">
+                <div className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center bg-gradient-to-br from-[var(--accent-cyan)]/15 to-[var(--accent-blue)]/15 border border-[var(--accent-cyan)]/30 shadow-[0_8px_32px_-8px_rgba(34,211,238,0.35)]">
+                  <svg className="w-10 h-10 text-[var(--accent-cyan)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-3">
+                  Access Patient Records
+                </h2>
+                <p className="text-[var(--text-secondary)] text-base mb-8 max-w-[420px] mx-auto leading-relaxed">
+                  Sign in as a caregiver or admin to view and manage patient medication schedules.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <Link
+                    href="/login"
+                    className="group btn-shine inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-br from-[var(--accent-cyan)] to-[var(--accent-emerald)] text-white font-semibold text-[14px] transition-all duration-300 hover:-translate-y-0.5 focus-ring"
+                    style={{ boxShadow: "0 10px 30px -8px rgba(34,211,238,0.55)" }}
+                  >
+                    Sign in as Caregiver
+                    <svg className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                  <Link
+                    href="/login"
+                    className="group btn-shine inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-br from-[var(--accent-blue)] to-[var(--accent-violet)] text-white font-semibold text-[14px] transition-all duration-300 hover:-translate-y-0.5 focus-ring"
+                    style={{ boxShadow: "0 10px 30px -8px rgba(167,139,250,0.5)" }}
+                  >
+                    Sign in as Admin
+                    <svg className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
 
-          {/* Today's Schedule Table */}
-          <div style={{
-            backgroundColor: '#0f172a',
-            borderRadius: '16px',
-            border: '1px solid #1e293b',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              padding: '20px 24px',
-              borderBottom: '1px solid #1e293b',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'white' }}>Today&apos;s Medication Schedule</h2>
-              <span style={{
-                fontSize: '12px',
-                color: '#64748b',
-                padding: '6px 12px',
-                backgroundColor: '#1e293b',
-                borderRadius: '6px',
-                fontFamily: 'monospace'
-              }}>
-                PUBLIC VIEW
-              </span>
+            {/* Stats Overview */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-12">
+              {stats.map((stat, index) => (
+                <div
+                  key={stat.label}
+                  className={`reveal delay-${(index + 1) * 100} glass-card card-hover p-6`}
+                >
+                  <div className="flex items-center gap-5">
+                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${statTone[stat.tone]}`}>
+                      {stat.icon}
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-white leading-none tracking-tight">{stat.value}</p>
+                      <p className="text-sm text-[var(--text-secondary)] mt-1">{stat.label}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#1e293b' }}>
-                    <th style={{ padding: '14px 24px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Patient</th>
-                    <th style={{ padding: '14px 24px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Room</th>
-                    <th style={{ padding: '14px 24px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Medication</th>
-                    <th style={{ padding: '14px 24px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Scheduled</th>
-                    <th style={{ padding: '14px 24px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {patientMedications.map((med, index) => (
-                    <tr
-                      key={med.id}
-                      style={{
-                        borderBottom: index < patientMedications.length - 1 ? '1px solid #1e293b' : 'none',
-                        transition: 'background-color 0.2s'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.5)'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <td style={{ padding: '16px 24px', fontSize: '14px', color: 'white', fontWeight: 500 }}>{med.patient}</td>
-                      <td style={{ padding: '16px 24px', fontSize: '14px', color: '#94a3b8', fontFamily: 'monospace' }}>{med.room}</td>
-                      <td style={{ padding: '16px 24px', fontSize: '14px', color: 'white' }}>{med.medicine}</td>
-                      <td style={{ padding: '16px 24px', fontSize: '14px', color: '#94a3b8' }}>{med.time}</td>
-                      <td style={{ padding: '16px 24px' }}>
-                        <span style={{
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          backgroundColor: med.status === "taken" ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                          color: med.status === "taken" ? '#34d399' : '#fbbf24',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.025em'
-                        }}>
-                          {med.status}
-                        </span>
-                      </td>
+
+            {/* Today's Schedule Table */}
+            <div className="reveal delay-200 glass-card">
+              <div className="glass-card-header">
+                <h2 className="text-base font-semibold text-white">
+                  Today&apos;s Medication Schedule
+                </h2>
+                <span className="badge badge-blue">Public View</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-white/[0.03]">
+                      <Th>Patient</Th>
+                      <Th>Room</Th>
+                      <Th>Medication</Th>
+                      <Th>Scheduled</Th>
+                      <Th>Status</Th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--glass-border)]">
+                    {patientMedications.map((med) => (
+                      <tr
+                        key={med.id}
+                        className="transition-colors hover:bg-white/[0.03]"
+                      >
+                        <td className="px-6 py-4 text-sm text-white font-medium">{med.patient}</td>
+                        <td className="px-6 py-4 text-sm text-[var(--text-secondary)] font-mono">{med.room}</td>
+                        <td className="px-6 py-4 text-sm text-white">{med.medicine}</td>
+                        <td className="px-6 py-4 text-sm text-[var(--text-secondary)]">{med.time}</td>
+                        <td className="px-6 py-4">
+                          <span className={`badge ${med.status === "taken" ? "badge-emerald" : "badge-amber"}`}>
+                            {med.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
-      <Footer />
-    </main>
+        </section>
+        <Footer />
+      </main>
+    </ScrollRevealWrapper>
+  );
+}
+
+function Th({ children }: { children: React.ReactNode }) {
+  return (
+    <th className="px-6 py-3 text-left text-[11px] font-semibold text-[var(--text-dim)] uppercase tracking-[0.05em] whitespace-nowrap">
+      {children}
+    </th>
   );
 }

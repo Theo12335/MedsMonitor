@@ -1,54 +1,44 @@
 "use client";
 
 const statusItems = [
-  { label: "DATA SYNC", status: "ACTIVE", color: "emerald" },
-  { label: "SECURE CONNECTION", status: "ENCRYPTED", color: "blue" },
-  { label: "SERVER STATUS", status: "OK", color: "emerald" },
-  { label: "LIVE DATA FEED", status: "STREAMING", color: "emerald" },
-  { label: "SECURE CONNECTION", status: "ENCRYPTED", color: "blue" },
-  { label: "SERVER STATUS", status: "OK", color: "emerald" },
-  { label: "LIVE DATA FEED", status: "STREAMING", color: "emerald" },
-  { label: "SECURE CONNECTION", status: "ENCRYPTED", color: "blue" },
-];
+  { label: "DATA SYNC", status: "ACTIVE", tone: "emerald" },
+  { label: "SECURE CONNECTION", status: "ENCRYPTED", tone: "blue" },
+  { label: "SERVER STATUS", status: "OK", tone: "emerald" },
+  { label: "LIVE DATA FEED", status: "STREAMING", tone: "cyan" },
+  { label: "SECURE CONNECTION", status: "ENCRYPTED", tone: "blue" },
+  { label: "SERVER STATUS", status: "OK", tone: "emerald" },
+  { label: "LIVE DATA FEED", status: "STREAMING", tone: "cyan" },
+  { label: "SECURE CONNECTION", status: "ENCRYPTED", tone: "violet" },
+] as const;
+
+const toneStatus: Record<(typeof statusItems)[number]["tone"], string> = {
+  emerald: "text-[var(--accent-emerald)]",
+  blue: "text-[var(--accent-blue)]",
+  cyan: "text-[var(--accent-cyan)]",
+  violet: "text-[var(--accent-violet)]",
+};
+
+const toneDot: Record<(typeof statusItems)[number]["tone"], string> = {
+  emerald: "bg-[var(--accent-emerald)] shadow-[0_0_8px_var(--accent-emerald)]",
+  blue: "bg-[var(--accent-blue)] shadow-[0_0_8px_var(--accent-blue)]",
+  cyan: "bg-[var(--accent-cyan)] shadow-[0_0_8px_var(--accent-cyan)]",
+  violet: "bg-[var(--accent-violet)] shadow-[0_0_8px_var(--accent-violet)]",
+};
 
 export default function Marquee() {
   return (
-    <div style={{
-      width: '100%',
-      overflow: 'hidden',
-      backgroundColor: '#030712',
-      borderTop: '1px solid #1e293b',
-      borderBottom: '1px solid #1e293b',
-      padding: '16px 0'
-    }}>
-      <div className="animate-marquee" style={{
-        display: 'flex',
-        whiteSpace: 'nowrap'
-      }}>
+    <div className="w-full overflow-hidden border-y border-[var(--glass-border)] bg-[var(--bg-primary)] py-4">
+      <div className="animate-marquee flex whitespace-nowrap w-max">
         {[...statusItems, ...statusItems].map((item, index) => (
           <div
             key={index}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              margin: '0 32px',
-              fontSize: '14px',
-              fontFamily: 'monospace'
-            }}
+            className="flex items-center gap-3 mx-8 text-[13px] font-mono"
           >
-            <span
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: item.color === "emerald" ? '#10b981' : '#3b82f6'
-              }}
-            ></span>
-            <span style={{ color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <span className={`w-2 h-2 rounded-full ${toneDot[item.tone]}`} />
+            <span className="text-[var(--text-muted)] uppercase tracking-wider">
               {item.label}
             </span>
-            <span style={{ color: item.color === "emerald" ? '#34d399' : '#60a5fa' }}>
+            <span className={`font-semibold ${toneStatus[item.tone]}`}>
               {item.status}
             </span>
           </div>

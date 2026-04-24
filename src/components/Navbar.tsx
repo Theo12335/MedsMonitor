@@ -1,46 +1,33 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+const navLinks = [
+  { href: "/", label: "Home" },
+  { href: "/caregiver-logs", label: "Caregiver Logs" },
+  { href: "/patient-logs", label: "Patient Logs" },
+  { href: "/dashboard", label: "Dashboard" },
+];
+
 export default function Navbar() {
+  const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <nav style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      zIndex: 50,
-      backgroundColor: 'rgba(3, 7, 18, 0.9)',
-      backdropFilter: 'blur(12px)',
-      borderBottom: '1px solid #1e293b'
-    }}>
-      <div style={{
-        maxWidth: '1280px',
-        margin: '0 auto',
-        padding: '0 24px'
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          height: '72px'
-        }}>
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[var(--glass-border)] bg-[rgba(3,7,18,0.85)] backdrop-blur-xl">
+      <div className="max-w-[1280px] mx-auto px-6">
+        <div className="flex items-center justify-between h-18 py-4">
           {/* Logo */}
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
-            <div style={{
-              width: '44px',
-              height: '44px',
-              background: 'linear-gradient(135deg, #10b981, #3b82f6)',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
+          <Link
+            href="/"
+            className="flex items-center gap-3 group focus-ring rounded-lg"
+            onClick={() => setIsMenuOpen(false)}
+          >
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-gradient-to-br from-[var(--accent-blue)] to-[var(--accent-violet)] shadow-[0_8px_24px_-6px_rgba(59,130,246,0.5)] transition-transform duration-200 group-hover:scale-105">
               <svg
-                style={{ width: '26px', height: '26px', color: 'white' }}
+                className="w-6 h-6 text-white"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -53,130 +40,43 @@ export default function Navbar() {
                 />
               </svg>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontWeight: 700, color: 'white', fontSize: '18px' }}>DoseKoPo!</span>
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>Smart Dispensing System</span>
+            <div className="flex flex-col leading-tight">
+              <span className="font-bold text-white text-[18px]">DoseKoPo!</span>
+              <span className="text-[11px] text-[var(--text-muted)] tracking-wide">Smart Dispensing System</span>
             </div>
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Link
-              href="/"
-              style={{
-                padding: '10px 20px',
-                borderRadius: '9999px',
-                backgroundColor: '#2563eb',
-                color: 'white',
-                fontSize: '14px',
-                fontWeight: 500,
-                textDecoration: 'none',
-                transition: 'background-color 0.2s'
-              }}
-            >
-              Home
-            </Link>
-            <Link
-              href="/caregiver-logs"
-              style={{
-                padding: '10px 20px',
-                borderRadius: '9999px',
-                color: '#cbd5e1',
-                fontSize: '14px',
-                fontWeight: 500,
-                textDecoration: 'none',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#1e293b';
-                e.currentTarget.style.color = 'white';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#cbd5e1';
-              }}
-            >
-              Caregiver Logs
-            </Link>
-            <Link
-              href="/patient-logs"
-              style={{
-                padding: '10px 20px',
-                borderRadius: '9999px',
-                color: '#cbd5e1',
-                fontSize: '14px',
-                fontWeight: 500,
-                textDecoration: 'none',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#1e293b';
-                e.currentTarget.style.color = 'white';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#cbd5e1';
-              }}
-            >
-              Patient Logs
-            </Link>
-            <Link
-              href="/dashboard"
-              style={{
-                padding: '10px 20px',
-                borderRadius: '9999px',
-                color: '#cbd5e1',
-                fontSize: '14px',
-                fontWeight: 500,
-                textDecoration: 'none',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#1e293b';
-                e.currentTarget.style.color = 'white';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#cbd5e1';
-              }}
-            >
-              Dashboard
-            </Link>
+          <div className="hidden md:flex items-center gap-1">
+            {navLinks.map((link) => {
+              const isActive = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`relative px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 focus-ring ${
+                    isActive
+                      ? "text-white bg-[var(--accent-blue)]/15 border border-[var(--accent-blue)]/30"
+                      : "text-[var(--text-secondary)] hover:text-white hover:bg-white/5 border border-transparent"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
           </div>
 
           {/* Mobile Menu Button */}
           <button
-            className="md:hidden"
-            style={{
-              padding: '10px',
-              borderRadius: '8px',
-              color: '#94a3b8',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer'
-            }}
+            className="md:hidden p-2 rounded-lg text-[var(--text-secondary)] hover:text-white hover:bg-white/5 transition-colors focus-ring"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
+            aria-label={isMenuOpen ? "Close menu" : "Open menu"}
           >
-            <svg
-              style={{ width: '28px', height: '28px' }}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {isMenuOpen ? (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               ) : (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               )}
             </svg>
           </button>
@@ -184,61 +84,25 @@ export default function Navbar() {
 
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className="md:hidden" style={{ padding: '16px 0', borderTop: '1px solid #1e293b' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <Link
-                href="/"
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  backgroundColor: '#2563eb',
-                  color: 'white',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  textDecoration: 'none'
-                }}
-              >
-                Home
-              </Link>
-              <Link
-                href="/caregiver-logs"
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  color: '#cbd5e1',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  textDecoration: 'none'
-                }}
-              >
-                Caregiver Logs
-              </Link>
-              <Link
-                href="/patient-logs"
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  color: '#cbd5e1',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  textDecoration: 'none'
-                }}
-              >
-                Patient Logs
-              </Link>
-              <Link
-                href="/dashboard"
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  color: '#cbd5e1',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  textDecoration: 'none'
-                }}
-              >
-                Dashboard
-              </Link>
+          <div className="md:hidden pb-4 pt-2 border-t border-[var(--glass-border)] animate-fadeIn">
+            <div className="flex flex-col gap-1 pt-2">
+              {navLinks.map((link) => {
+                const isActive = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? "text-white bg-[var(--accent-blue)]/15 border border-[var(--accent-blue)]/30"
+                        : "text-[var(--text-secondary)] hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}
