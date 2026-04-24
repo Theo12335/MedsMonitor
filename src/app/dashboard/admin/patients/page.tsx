@@ -2,6 +2,7 @@
 
 import DashboardLayout from "@/components/DashboardLayout";
 import Panel from "@/components/dashboard/Panel";
+import PatientAvatar from "@/components/dashboard/PatientAvatar";
 import StatTile from "@/components/dashboard/StatTile";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -13,6 +14,7 @@ interface Patient {
   room_number: string;
   admission_date: string;
   notes: string | null;
+  avatar_url: string | null;
   created_at: string;
 }
 
@@ -279,9 +281,17 @@ export default function PatientManagementPage() {
                   <tr key={patient.id} className="hover:bg-white/5 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--accent-blue)] to-[var(--accent-violet)] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                          {patient.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                        </div>
+                        <PatientAvatar
+                          patient={patient}
+                          size={40}
+                          editable
+                          onChanged={(url) => {
+                            setPatients((prev) =>
+                              prev.map((p) => (p.id === patient.id ? { ...p, avatar_url: url } : p))
+                            );
+                          }}
+                          onError={(msg) => setError(msg)}
+                        />
                         <span className="text-sm text-white font-medium truncate">{patient.name}</span>
                       </div>
                     </td>
@@ -362,9 +372,23 @@ export default function PatientManagementPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="glass-card-header">
-                <div className="min-w-0">
-                  <h2 className="text-base font-semibold text-white truncate">{selectedPatient.name}&apos;s Medications</h2>
-                  <p className="text-xs text-[var(--text-muted)]">Room {selectedPatient.room_number}</p>
+                <div className="flex items-center gap-3 min-w-0">
+                  <PatientAvatar
+                    patient={selectedPatient}
+                    size={40}
+                    editable
+                    onChanged={(url) => {
+                      setSelectedPatient((prev) => (prev ? { ...prev, avatar_url: url } : prev));
+                      setPatients((prev) =>
+                        prev.map((p) => (p.id === selectedPatient.id ? { ...p, avatar_url: url } : p))
+                      );
+                    }}
+                    onError={(msg) => setError(msg)}
+                  />
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-white truncate">{selectedPatient.name}&apos;s Medications</h2>
+                    <p className="text-xs text-[var(--text-muted)]">Room {selectedPatient.room_number}</p>
+                  </div>
                 </div>
                 <button
                   onClick={() => {

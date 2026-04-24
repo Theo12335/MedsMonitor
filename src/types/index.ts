@@ -25,6 +25,7 @@ export interface Patient {
   role: "patient"; // Note: "patient" is not a valid login role, but kept for data structure
   roomNumber: string;
   admissionDate: Date;
+  avatarUrl?: string | null;
   assignedCaregivers: string[]; // Caregiver IDs
   medications: PatientMedication[];
   createdAt: Date;

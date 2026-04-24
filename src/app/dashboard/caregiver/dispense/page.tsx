@@ -2,6 +2,7 @@
 
 import DashboardLayout from "@/components/DashboardLayout";
 import Panel from "@/components/dashboard/Panel";
+import PatientAvatar from "@/components/dashboard/PatientAvatar";
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -21,6 +22,7 @@ interface PatientWithMeds {
   id: string;
   name: string;
   room: string;
+  avatar_url: string | null;
   medications: PatientMedication[];
 }
 
@@ -175,6 +177,7 @@ function DispensePageContent() {
           id: patient.id,
           name: patient.name,
           room: patient.room_number,
+          avatar_url: patient.avatar_url,
           medications,
         });
       }
@@ -298,7 +301,11 @@ function DispensePageContent() {
                           : "bg-white/5 border-[var(--glass-border)] hover:border-[var(--accent-blue)]/30 hover:bg-white/10"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <PatientAvatar
+                          patient={{ id: patient.id, name: patient.name, avatar_url: patient.avatar_url }}
+                          size={36}
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-white truncate">{patient.name}</p>
                           <p className="text-xs text-[var(--text-muted)] truncate">Room {patient.room}</p>

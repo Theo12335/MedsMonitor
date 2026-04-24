@@ -3,6 +3,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import Panel from "@/components/dashboard/Panel";
 import HeroCard from "@/components/dashboard/HeroCard";
+import PatientAvatar from "@/components/dashboard/PatientAvatar";
 import StatTile from "@/components/dashboard/StatTile";
 import DonutChart from "@/components/dashboard/charts/DonutChart";
 import { useState, useEffect } from "react";
@@ -11,14 +12,14 @@ import { useProfile, usePatients, useDrawers, useDashboardStats, useAttendance }
 
 interface PendingMedication {
   id: string;
+  patientId: string;
   patientName: string;
-  patientInitials: string;
+  patientAvatarUrl: string | null;
   room: string;
   medicine: string;
   dosage: string;
   time: string;
   priority: "high" | "medium" | "normal";
-  patientId: string;
 }
 
 interface RecentActivity {
@@ -124,7 +125,7 @@ export default function CaregiverDashboard() {
         .select(`
           id,
           scheduled_time,
-          patient:patients(id, name, room),
+          patient:patients(id, name, room_number, avatar_url),
           medication:medications(name, dosage)
         `)
         .eq("status", "pending")
@@ -148,12 +149,8 @@ export default function CaregiverDashboard() {
             id: log.id,
             patientId: log.patient?.id || "",
             patientName: log.patient?.name || "Unknown",
-            patientInitials: (log.patient?.name || "U")
-              .split(" ")
-              .map((n: string) => n[0])
-              .join("")
-              .slice(0, 2),
-            room: log.patient?.room || "N/A",
+            patientAvatarUrl: log.patient?.avatar_url ?? null,
+            room: log.patient?.room_number || "N/A",
             medicine: log.medication?.name || "Unknown",
             dosage: log.medication?.dosage || "",
             time: scheduledTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
@@ -326,15 +323,18 @@ export default function CaregiverDashboard() {
                 pendingMedications.slice(0, 6).map((med) => (
                   <div key={med.id} className="p-4 flex items-center gap-3 hover:bg-[var(--glass-highlight)] transition-colors min-w-0">
                     <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
+                      className={`rounded-xl p-0.5 flex-shrink-0 ${
                         med.priority === "high"
-                          ? "bg-gradient-to-br from-[var(--accent-rose)] to-[var(--accent-amber)] text-white"
+                          ? "bg-gradient-to-br from-[var(--accent-rose)] to-[var(--accent-amber)]"
                           : med.priority === "medium"
-                          ? "bg-[var(--accent-amber)]/20 text-[var(--accent-amber)]"
-                          : "bg-[var(--accent-blue)]/20 text-[var(--accent-blue)]"
+                          ? "bg-[var(--accent-amber)]/40"
+                          : "bg-[var(--accent-blue)]/30"
                       }`}
                     >
-                      {med.patientInitials}
+                      <PatientAvatar
+                        patient={{ id: med.patientId, name: med.patientName, avatar_url: med.patientAvatarUrl }}
+                        size={40}
+                      />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 min-w-0">

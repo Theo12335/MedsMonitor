@@ -1,6 +1,7 @@
 "use client";
 
 import DashboardLayout from "@/components/DashboardLayout";
+import PatientAvatar from "@/components/dashboard/PatientAvatar";
 import StatTile from "@/components/dashboard/StatTile";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -12,6 +13,7 @@ interface PatientWithMeds {
   room_number: string;
   admission_date: string;
   notes: string | null;
+  avatar_url: string | null;
   medicationCount: number;
   pendingToday: number;
 }
@@ -263,21 +265,21 @@ export default function PatientsPage() {
         {filteredPatients.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {filteredPatients.map((patient) => {
-              const gradientColors = [
-                "from-[var(--accent-cyan)] to-[var(--accent-emerald)]",
-                "from-[var(--accent-violet)] to-[var(--accent-rose)]",
-                "from-[var(--accent-amber)] to-[var(--accent-rose)]",
-                "from-[var(--accent-blue)] to-[var(--accent-violet)]",
-              ];
-              const gradient = gradientColors[patient.name.charCodeAt(0) % 4];
-
               return (
-                <div key={patient.id} className="glass-card hover:border-[var(--accent-cyan)]/30 transition-all group">
+                <div key={patient.id} className="glass-card hover:border-[var(--accent-cyan)]/30 transition-all">
                   <div className="p-5">
                     <div className="flex items-start gap-4">
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-semibold text-lg flex-shrink-0`}>
-                        {patient.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                      </div>
+                      <PatientAvatar
+                        patient={patient}
+                        size={48}
+                        editable
+                        onChanged={(url) => {
+                          setPatientsWithMeds((prev) =>
+                            prev.map((p) => (p.id === patient.id ? { ...p, avatar_url: url } : p))
+                          );
+                        }}
+                        onError={(msg) => setError(msg)}
+                      />
                       <div className="flex-1 min-w-0">
                         <h3 className="text-base font-semibold text-white truncate">{patient.name}</h3>
                         <p className="text-sm text-[var(--text-muted)]">Room {patient.room_number}</p>
@@ -349,9 +351,18 @@ export default function PatientsPage() {
               {/* Modal Header */}
               <div className="p-5 border-b border-[var(--glass-border)] flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--accent-cyan)] to-[var(--accent-emerald)] flex items-center justify-center text-white font-semibold">
-                    {selectedPatient.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                  </div>
+                  <PatientAvatar
+                    patient={selectedPatient}
+                    size={40}
+                    editable
+                    onChanged={(url) => {
+                      setSelectedPatient((prev) => (prev ? { ...prev, avatar_url: url } : prev));
+                      setPatientsWithMeds((prev) =>
+                        prev.map((p) => (p.id === selectedPatient.id ? { ...p, avatar_url: url } : p))
+                      );
+                    }}
+                    onError={(msg) => setError(msg)}
+                  />
                   <div>
                     <h2 className="text-lg font-semibold text-white">{selectedPatient.name}</h2>
                     <p className="text-sm text-[var(--text-muted)]">Room {selectedPatient.room_number}</p>

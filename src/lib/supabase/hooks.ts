@@ -19,6 +19,7 @@ export interface Patient {
   room_number: string;
   admission_date: string;
   notes: string | null;
+  avatar_url: string | null;
 }
 
 export interface Medication {
