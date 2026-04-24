@@ -211,7 +211,7 @@ export default function DashboardLayout({
           </div>
           {sidebarOpen && (
             <div className="ml-3 overflow-hidden">
-              <div className="text-sm font-semibold text-white truncate">MedsMonitor</div>
+              <div className="text-sm font-semibold text-white truncate">DoseKoPo!</div>
               <div className="text-xs text-[var(--text-dim)] truncate">Healthcare System</div>
             </div>
           )}

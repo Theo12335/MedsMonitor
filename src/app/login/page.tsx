@@ -138,7 +138,7 @@ export default function LoginPage() {
               />
             </svg>
           </div>
-          <span style={{ fontWeight: 700, color: 'white', fontSize: '24px' }}>DoseKoPo</span>
+          <span style={{ fontWeight: 700, color: 'white', fontSize: '24px' }}>DoseKoPo!</span>
         </Link>
 
         {/* Login Card */}

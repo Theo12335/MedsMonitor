@@ -130,7 +130,7 @@ export default function CoreModules() {
               </svg>
             </div>
             <div>
-              <p style={{ color: 'white', fontWeight: 600, fontSize: '15px' }}>Smart Care Monitor</p>
+              <p style={{ color: 'white', fontWeight: 600, fontSize: '15px' }}>DoseKoPo!</p>
               <p style={{ color: '#94a3b8', fontSize: '12px' }}>Advanced Healthcare Dashboard</p>
             </div>
           </div>

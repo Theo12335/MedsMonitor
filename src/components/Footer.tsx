@@ -39,7 +39,7 @@ export default function Footer() {
                   />
                 </svg>
               </div>
-              <span style={{ fontWeight: 700, color: 'white', fontSize: '20px' }}>DoseKoPo</span>
+              <span style={{ fontWeight: 700, color: 'white', fontSize: '20px' }}>DoseKoPo!</span>
             </Link>
             <p style={{ color: '#94a3b8', fontSize: '15px', lineHeight: 1.6, marginTop: '24px' }}>
               Smart Medication Dispensing System for modern healthcare facilities.
@@ -135,7 +135,7 @@ export default function Footer() {
           gap: '16px'
         }}>
           <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>
-            &copy; 2025 DoseKoPo. All rights reserved.
+            &copy; 2025 DoseKoPo! All rights reserved.
           </p>
           <p style={{ color: '#475569', fontSize: '14px', margin: 0 }}>
             Smart Medication Dispensing System

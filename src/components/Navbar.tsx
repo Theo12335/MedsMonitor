@@ -54,7 +54,7 @@ export default function Navbar() {
               </svg>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontWeight: 700, color: 'white', fontSize: '18px' }}>DoseKoPo</span>
+              <span style={{ fontWeight: 700, color: 'white', fontSize: '18px' }}>DoseKoPo!</span>
               <span style={{ fontSize: '12px', color: '#94a3b8' }}>Smart Dispensing System</span>
             </div>
           </Link>

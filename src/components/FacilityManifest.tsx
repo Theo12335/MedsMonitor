@@ -133,7 +133,7 @@ export default function FacilityManifest() {
               System Provider
             </div>
             <p style={{ color: 'white', fontWeight: 600, fontSize: '16px' }}>
-              Smart Care Monitor Healthcare Center
+              DoseKoPo! Healthcare Center
             </p>
           </div>
 

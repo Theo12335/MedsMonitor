@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DoseKoPo | Smart Medication Dispensing System",
+  title: "DoseKoPo! | Smart Medication Dispensing System",
   description: "Real-time medication dispensing and management system for tracking caregiver attendance and patient medication schedules with absolute precision.",
 };
 
